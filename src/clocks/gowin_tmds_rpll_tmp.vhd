@@ -5,24 +5,24 @@
 --Part Number: GW1NR-LV9QN88PC6/I5
 --Device: GW1NR-9
 --Device Version: C
---Created Time: Fri Sep 19 03:44:15 2025
+--Created Time: Fri Sep 19 03:43:59 2025
 
 --Change the instance name and port connections to the signal names
 ----------Copy here to design--------
 
-component Gowin_HDMI_CLKDIV
+component Gowin_TMDS_rPLL
     port (
         clkout: out std_logic;
-        hclkin: in std_logic;
-        resetn: in std_logic
+        lock: out std_logic;
+        clkin: in std_logic
     );
 end component;
 
-your_instance_name: Gowin_HDMI_CLKDIV
+your_instance_name: Gowin_TMDS_rPLL
     port map (
         clkout => clkout,
-        hclkin => hclkin,
-        resetn => resetn
+        lock => lock,
+        clkin => clkin
     );
 
 ----------Copy end-------------------

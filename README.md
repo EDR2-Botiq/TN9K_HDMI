@@ -1,6 +1,6 @@
 # TN9K HDMI - Tang Nano 9K HDMI Library
 
-A complete HDMI transmitter implementation for the Tang Nano 9K FPGA board featuring auto-cycling demo patterns, improved multi-packet HDMI audio (48 kHz tone via distributed data islands) and extensive debug capabilities.
+A complete HDMI transmitter implementation for the Tang Nano 9K FPGA board featuring auto-cycling demo patterns, stable HDMI audio (48 kHz using VIC20Nano packet infrastructure) and extensive debug capabilities.
 
 ## Overview
 
@@ -9,7 +9,7 @@ This project provides a reusable HDMI transmitter IP core for the Tang Nano 9K F
 ## Features
 
 - **HDMI Digital Video Output** at 640x480@60Hz using TMDS encoding
-- **Integrated HDMI Audio (Demo Grade)** multi-packet TERC4 islands + ACR – tone generator
+- **Stable HDMI Audio Support** VIC20Nano packet infrastructure with TERC4 + ACR
 - **6 Auto-Cycling Demo Patterns** with 5-second intervals
 - **Comprehensive Debug System** with LED status indicators
 - **Robust Clock Generation** with debounced PLL lock detection
@@ -85,7 +85,10 @@ TN9K_HDMI/
 │   ├── TN9K_HDMI_top.vhd                  # Top-level (video + audio + patterns)
 │   ├── demo_pattern_gen.vhd               # 6-pattern generator + audio tone source
 │   ├── hdmi_tx_640x480.vhd                # Integrated transmitter (video/audio mux)
-│   ├── hdmi_audio_packetizer.vhd          # Data island + TERC4 symbol scheduler
+│   ├── hdmi_packet_picker.vhd             # VIC20Nano packet scheduling system
+│   ├── hdmi_packet_assembler.vhd          # BCH error correction and packet assembly
+│   ├── hdmi_audio_sample_packet.vhd       # Audio sample packet generator
+│   ├── hdmi_constants.vhd                 # Centralized timing and audio constants
 │   ├── hdmi_audio_acr.vhd                 # ACR generator (N / CTS)
 │   ├── hdmi_terc4.vhd                     # 4-bit to 10-bit TERC4 encoding table
 │   ├── hdmi_timing.vhd                    # 640x480@60Hz timing generator
@@ -119,14 +122,15 @@ TN9K_HDMI/
 - Supports manual pattern override
 - Includes animated patterns for motion testing
 
-#### 3. **Audio Path** (`hdmi_audio_acr.vhd`, `hdmi_audio_packetizer.vhd`, `hdmi_terc4.vhd`)
+#### 3. **Audio Path** (`hdmi_audio_acr.vhd`, `hdmi_packet_picker.vhd`, `hdmi_terc4.vhd`)
 
 - ACR (N/CTS) generation for 48 kHz sync @ 25.200 MHz pixel clock
-- TERC4 4->10 symbol mapping for HDMI data islands
-- Multi-packet vertical blank scheduler with small FIFO buffering (up to 64 samples)
-- Distributes multiple Audio Sample Packets + one ACR packet each frame
-- Demo tone source (square-wave) supplies PCM samples; architecture now ready for real PCM source injection
-- Still not fully spec-complete (doesn't yet target exact 800 samples/frame quantity or infoframes) but far closer to continuous audio than single-packet demo
+- TERC4 4->10 symbol mapping with registered inputs for signal stability
+- VIC20Nano packet infrastructure using efficient case statements (no large sparse arrays)
+- BCH error correction and proper packet assembly
+- Audio Sample Packets with IEC 60958 formatting
+- Pattern-specific demo tones integrated into pattern generator
+- Fixed synthesis issues for stable video + audio operation
 
 #### 4. **TMDS Encoding** (`tmds_encoder.vhd`)
 

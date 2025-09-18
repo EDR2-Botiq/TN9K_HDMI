@@ -1,0 +1,26 @@
+<?xml version="1" encoding="UTF-8"?>
+<!DOCTYPE gowin-fpga-project>
+<Project>
+    <Template>FPGA</Template>
+    <Version>5</Version>
+    <Device name="GW1NR-9C" pn="GW1NR-LV9QN88PC6/I5">gw1nr9c-004</Device>
+    <FileList>
+        <File path="src/TN9K_HDMI_800x480_top.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/clocks/gowin_hdmi_clkdiv_800x480.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/clocks/gowin_tmds_rpll_800x480.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/demo_pattern_gen.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_audio_acr.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_constants.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_audio_sample_packet.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_packet_assembler.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_packet_picker.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_terc4.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_timing.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_tx_800x480.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/tmds_encoder.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/tn9k_hdmi.cst" type="file.cst" enable="1"/>
+        <File path="src/tn9k_hdmi.sdc" type="file.sdc" enable="1"/>
+        <File path="src/clocks/gowin_hdmi_clkdiv.ipc" type="file.other" enable="1"/>
+        <File path="src/clocks/gowin_tmds_rpll_800x480.ipc" type="file.other" enable="1"/>
+    </FileList>
+</Project>

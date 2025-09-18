@@ -1,15 +1,16 @@
 -------------------------------------------------------------------------------
 -- hdmi_audio_acr.vhd
--- Generates ACR packet fields (N and CTS) for 48 kHz audio at either
--- 25.175 MHz or 25.200 MHz TMDS clock. Select by generics.
+-- Generates ACR packet fields (N and CTS) for 48 kHz audio at
+-- 32.186 MHz TMDS clock for 800x480@60Hz resolution.
 -------------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use work.hdmi_constants.all;
 
 entity hdmi_audio_acr is
     generic (
-        TMDS_CLK_25_175 : boolean := true   -- if false, uses 25.200 MHz
+        TMDS_CLK_25_175 : boolean := false   -- Uses 32.186 MHz for 800x480
     );
     port (
         clk_pix  : in  std_logic;
@@ -32,11 +33,12 @@ begin
             cts_reg <= (others => '0');
         elsif rising_edge(clk_pix) then
             if TMDS_CLK_25_175 then
-                n_reg   <= std_logic_vector(to_unsigned(6144, 20));
+                n_reg   <= ACR_N_VECTOR;   -- 6144 for 48kHz
                 cts_reg <= std_logic_vector(to_unsigned(25175, 20));
             else
-                n_reg   <= std_logic_vector(to_unsigned(6144, 20));
-                cts_reg <= std_logic_vector(to_unsigned(25200, 20));
+                -- VIC20Nano-compatible 800x480@60Hz timing
+                n_reg   <= ACR_N_VECTOR;   -- 6144 for 48kHz (standard)
+                cts_reg <= ACR_CTS_VECTOR; -- 32400 for actual 32.4MHz pixel clock
             end if;
         end if;
     end process;

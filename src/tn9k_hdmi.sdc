@@ -1,7 +1,7 @@
 ################################################################################
 # Tang Nano 9K HDMI TX Module - SDC Timing Constraints
 # Target: GW1NR-9C FPGA
-# Function: 640x480@60Hz HDMI Transmitter
+# Function: 800x480@60Hz HDMI Transmitter
 ################################################################################
 
 ################################################################################
@@ -12,8 +12,8 @@
 create_clock -name clk_crystal -period 37.037 -waveform {0 18.518} [get_ports {clk_crystal}]
 
 # Generated clocks (informational - Gowin will derive automatically)
-# TMDS PLL: 27 MHz -> 126 MHz (period = 7.937 ns, exact calculation)
-# Pixel Clock Divider: 126 MHz ÷ 5 -> 25.2 MHz (period = 39.683 ns, exact for VESA timing)
+# TMDS PLL: 27 MHz -> 162 MHz (period = 6.173 ns, exact calculation)
+# Pixel Clock Divider: 162 MHz ÷ 5 -> 32.4 MHz (period = 30.864 ns, for 800x480@60Hz)
 
 ################################################################################
 # 1a. Generated Clocks (Informational – tool may infer automatically)

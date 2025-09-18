@@ -14,6 +14,11 @@ entity hdmi_terc4 is
 end entity;
 
 architecture rtl of hdmi_terc4 is
+    -- Synthesis attributes to prevent optimization
+    attribute keep : string;
+    attribute keep of q : signal is "true";
+    attribute syn_keep : string;
+    attribute syn_keep of q : signal is "true";
 begin
     process(d)
     begin

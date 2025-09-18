@@ -96,19 +96,23 @@ begin
         end if;
     end process;
     
-    -- Optional pipeline register between stage 1 and stage 2 for higher clock targets
-    process(clk, reset)
-    begin
-        if reset = '1' then
-            q_m_reg <= (others => '0');
-        elsif rising_edge(clk) then
-            if PIPELINE_BALANCE then
-                q_m_reg <= q_m;
-            end if;
-        end if;
-    end process;
+    -- Optional pipeline register between stage 1 and stage 2 for higher clock targets.
+    -- Use generate so unused register logic is completely removed when PIPELINE_BALANCE=false.
+    no_pipeline_gen : if (not PIPELINE_BALANCE) generate
+        q_m_stage <= q_m;
+    end generate;
 
-    q_m_stage <= q_m when (not PIPELINE_BALANCE) else q_m_reg;
+    pipeline_gen : if PIPELINE_BALANCE generate
+        process(clk, reset)
+        begin
+            if reset = '1' then
+                q_m_reg <= (others => '0');
+            elsif rising_edge(clk) then
+                q_m_reg <= q_m;  -- Unconditional assignment prevents latch inference
+            end if;
+        end process;
+        q_m_stage <= q_m_reg;
+    end generate;
 
     -- Count ones and zeros in selected stage output
     ones_count <= count_ones(q_m_stage(7 downto 0));

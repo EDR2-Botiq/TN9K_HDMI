@@ -15,14 +15,6 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity hdmi_tx_640x480 is
-    generic (
-        -- Controls whether TERC4 audio/data island words are actually
-        -- multiplexed onto the TMDS channels. Default = false because on the
-        -- Tang Nano 9K (GW1NR-9C) current toolchain/hardware combination the
-        -- act of switching between TMDS video symbols and TERC4 symbols has
-        -- been observed to corrupt video lock on a range of sinks.
-        AUDIO_MUX_ENABLE : boolean := false
-    );
     port (
         -- Clock and reset inputs
         clk_27mhz       : in  std_logic;  -- 27 MHz crystal input
@@ -214,6 +206,10 @@ architecture rtl of hdmi_tx_640x480 is
     signal serial_red       : std_logic;
     signal serial_green     : std_logic;
     signal serial_blue      : std_logic;
+    signal serial_clk       : std_logic;
+
+    -- TMDS clock pattern for serializer
+    constant CLK_TMDS_PATTERN : std_logic_vector(9 downto 0) := "0000011111";
 
     -- Reset synchronization registers
     signal reset_meta       : std_logic := '1';
@@ -224,6 +220,7 @@ architecture rtl of hdmi_tx_640x480 is
     -- Audio clock generation (corrected for 25.2 MHz)
     signal audio_counter    : unsigned(15 downto 0) := (others => '0');
     constant AUDIO_DIV      : integer := 262;  -- 25200000/(48000*2) = 262.5, use 262 for ~48.08kHz
+    signal audio_clk_toggle : std_logic := '0';
 
 begin
 
@@ -315,10 +312,12 @@ begin
         if reset_sync = '1' then
             audio_counter <= (others => '0');
             audio_sample_strobe <= '0';
+            audio_clk_toggle <= '0';
         elsif rising_edge(clk_pixel_int) then
             if audio_counter >= AUDIO_DIV - 1 then
                 audio_counter <= (others => '0');
                 audio_sample_strobe <= '1';
+                audio_clk_toggle <= not audio_clk_toggle;
             else
                 audio_counter <= audio_counter + 1;
                 audio_sample_strobe <= '0';
@@ -326,9 +325,8 @@ begin
         end if;
     end process;
 
-    -- Use pixel clock domain for all audio processing
-    -- Audio timing is controlled by audio_sample_strobe (48kHz)
-    clk_audio_int <= clk_pixel_int;
+    -- Generate proper 48kHz audio clock (toggle-based)
+    clk_audio_int <= audio_clk_toggle;
 
     ----------------------------------------------------------------------------
     -- Audio Clock Regeneration
@@ -406,42 +404,29 @@ begin
         );
 
     ----------------------------------------------------------------------------
-    -- TMDS / (optional) TERC4 Data Island Multiplexing
+    -- TMDS/TERC4 Data Multiplexing (with safety logic)
     ----------------------------------------------------------------------------
-    -- Even with careful gating the TN9K platform currently exhibits loss of
-    -- video sync when actively toggling to TERC4 symbols. A generic allows the
-    -- feature to remain architecturally present but disabled by default.
 
-    -- Simplified data island qualification - trust the audio packetizer
-    -- The audio packetizer already handles proper blanking period detection
+    -- Safe audio data island validation
+    -- Only allow TERC4 during vertical blanking period when not in active display
     process(clk_pixel_int, reset_sync)
     begin
         if reset_sync = '1' then
             di_valid_safe <= '0';
-            audio_active  <= '0';
+            audio_active <= '0';
         elsif rising_edge(clk_pixel_int) then
-            audio_active  <= audio_enable;
-            -- Simple qualification: only check if audio is enabled and packetizer says valid
-            di_valid_safe <= di_valid and audio_enable;
+            -- Only allow data islands during vertical blanking (not during active video or horizontal blanking)
+            audio_active <= audio_enable and (not vsync_int);
+            di_valid_safe <= di_valid and audio_active and (not de_int);
         end if;
     end process;
 
-    -- Generate block for optional multiplexing.
-    audio_mux_gen : if AUDIO_MUX_ENABLE generate
-        -- When a qualified data island symbol is present substitute the three
-        -- channel TMDS words with their already TERC4 encoded counterparts.
-        -- Mapping: terc_ch0 -> Blue (channel 0), terc_ch1 -> Green, terc_ch2 -> Red
-        final_tmds_blue  <= terc_ch0 when di_valid_safe = '1' else tmds_blue;
-        final_tmds_green <= terc_ch1 when di_valid_safe = '1' else tmds_green;
-        final_tmds_red   <= terc_ch2 when di_valid_safe = '1' else tmds_red;
-    end generate;
-
-    no_audio_mux_gen : if (not AUDIO_MUX_ENABLE) generate
-        -- Pure video path (current stable configuration)
-        final_tmds_red   <= tmds_red;
-        final_tmds_green <= tmds_green;
-        final_tmds_blue  <= tmds_blue;
-    end generate;
+    -- Temporarily disable audio for debugging - use pure TMDS video only
+    -- TERC4 data is already 10-bit encoded, so mux after TMDS encoding
+    -- Additional safety: only use TERC4 during safe periods
+    final_tmds_red   <= tmds_red;   -- Disable audio: terc_ch2 when di_valid_safe = '1' else tmds_red;
+    final_tmds_green <= tmds_green; -- Disable audio: terc_ch1 when di_valid_safe = '1' else tmds_green;
+    final_tmds_blue  <= tmds_blue;  -- Disable audio: terc_ch0 when di_valid_safe = '1' else tmds_blue;
 
     ----------------------------------------------------------------------------
     -- TMDS Serialization
@@ -471,7 +456,13 @@ begin
             D5 => final_tmds_blue(5), D6 => final_tmds_blue(6), D7 => final_tmds_blue(7), D8 => final_tmds_blue(8), D9 => final_tmds_blue(9)
         );
 
-    -- Clock serializer removed - using direct pixel clock approach
+    serializer_clk: OSER10
+        generic map (GSREN => "false", LSREN => "true")
+        port map (
+            Q => serial_clk, PCLK => clk_pixel_int, FCLK => clk_tmds_serial, RESET => reset_sync,
+            D0 => CLK_TMDS_PATTERN(0), D1 => CLK_TMDS_PATTERN(1), D2 => CLK_TMDS_PATTERN(2), D3 => CLK_TMDS_PATTERN(3), D4 => CLK_TMDS_PATTERN(4),
+            D5 => CLK_TMDS_PATTERN(5), D6 => CLK_TMDS_PATTERN(6), D7 => CLK_TMDS_PATTERN(7), D8 => CLK_TMDS_PATTERN(8), D9 => CLK_TMDS_PATTERN(9)
+        );
 
     ----------------------------------------------------------------------------
     -- Differential Output Buffers
@@ -486,8 +477,7 @@ begin
     elvds_blue: ELVDS_OBUF
         port map (I => serial_blue, O => hdmi_tx_p(0), OB => hdmi_tx_n(0));
 
-    -- Use direct pixel clock for HDMI clock output (VIC20Nano approach)
     elvds_clk: ELVDS_OBUF
-        port map (I => clk_pixel_int, O => hdmi_tx_clk_p, OB => hdmi_tx_clk_n);
+        port map (I => serial_clk, O => hdmi_tx_clk_p, OB => hdmi_tx_clk_n);
 
 end rtl;

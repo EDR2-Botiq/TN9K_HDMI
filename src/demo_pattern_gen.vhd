@@ -1,12 +1,31 @@
 --------------------------------------------------------------------------------
--- Demo Pattern Generator for HDMI Display
--- Generates 6 different test patterns at 640x480 resolution
--- Patterns automatically cycle every 5 seconds
+-- Demo Pattern Generator with VIC20Nano-Compatible Audio
+-- Generates 6 test patterns at 800x480 resolution with simple audio tone
+--
+-- VIC20NANO AUDIO APPROACH:
+-- ========================
+-- Simple single-tone audio generation for maximum stability and compatibility.
+-- Uses constant 440 Hz tone output - matches VIC20Nano's minimal approach.
+--
+-- PATTERNS INCLUDED:
+-- - Pattern 0 (Color Bars): Classic RGB color bar pattern
+-- - Pattern 1 (Checkerboard): Black/white checkerboard pattern
+-- - Pattern 2 (Gradient): Horizontal/vertical RGB gradients
+-- - Pattern 3 (Grid): White grid on dark background
+-- - Pattern 4 (Moving Box): Animated colored box
+-- - Pattern 5 (Rainbow): Diagonal rainbow stripes
+--
+-- AUDIO IMPLEMENTATION (VIC20Nano Compatible):
+-- - Simple 440 Hz square wave tone generation
+-- - Phase accumulator for stable frequency output
+-- - Stereo output with identical left/right channels
+-- - Minimal complexity for maximum reliability
 --------------------------------------------------------------------------------
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use work.hdmi_constants.all;
 
 entity demo_pattern_gen is
     port (
@@ -42,9 +61,8 @@ end demo_pattern_gen;
 
 architecture rtl of demo_pattern_gen is
 
-    -- Constants for timing (corrected for 25.2 MHz pixel clock)
-    constant CLOCKS_PER_SEC : integer := 25200000;  -- 25.2 MHz
-    constant PATTERN_DURATION : integer := 5;        -- 5 seconds per pattern
+    -- Constants for timing (using centralized constants)
+    constant PATTERN_DURATION : integer := PATTERN_HOLD_TIME;  -- From hdmi_constants
     constant CLOCKS_PER_PATTERN : integer := CLOCKS_PER_SEC * PATTERN_DURATION;
 
     -- Video signals
@@ -125,24 +143,32 @@ begin
             if video_active = '1' then
                 case active_pattern is
                     
-                    -- Pattern 0: Color Bars (Optimized with bit indexing)
+                    -- Pattern 0: Color Bars (Fixed for 800x480)
                     when "000" =>
-                        -- Use upper 3 bits of X for 8 bars (640/8 = 80px each)
-                        case x(9 downto 7) is
-                            when "000" => red <= x"FF"; green <= x"FF"; blue <= x"FF";  -- White
-                            when "001" => red <= x"FF"; green <= x"FF"; blue <= x"00";  -- Yellow  
-                            when "010" => red <= x"00"; green <= x"FF"; blue <= x"FF";  -- Cyan
-                            when "011" => red <= x"00"; green <= x"FF"; blue <= x"00";  -- Green
-                            when "100" => red <= x"FF"; green <= x"00"; blue <= x"FF";  -- Magenta
-                            when "101" => red <= x"FF"; green <= x"00"; blue <= x"00";  -- Red
-                            when "110" => red <= x"00"; green <= x"00"; blue <= x"FF";  -- Blue
-                            when others => red <= x"00"; green <= x"00"; blue <= x"00";  -- Black
-                        end case;
+                        -- 8 bars: create index 0-7 based on x position for 800 pixels
+                        if x < 100 then
+                            red <= x"FF"; green <= x"FF"; blue <= x"FF";  -- White
+                        elsif x < 200 then
+                            red <= x"FF"; green <= x"FF"; blue <= x"00";  -- Yellow
+                        elsif x < 300 then
+                            red <= x"00"; green <= x"FF"; blue <= x"FF";  -- Cyan
+                        elsif x < 400 then
+                            red <= x"00"; green <= x"FF"; blue <= x"00";  -- Green
+                        elsif x < 500 then
+                            red <= x"FF"; green <= x"00"; blue <= x"FF";  -- Magenta
+                        elsif x < 600 then
+                            red <= x"FF"; green <= x"00"; blue <= x"00";  -- Red
+                        elsif x < 700 then
+                            red <= x"00"; green <= x"00"; blue <= x"FF";  -- Blue
+                        else
+                            red <= x"00"; green <= x"00"; blue <= x"00";  -- Black
+                        end if;
                     
                     -- Pattern 1: Checkerboard (Optimized - single XOR)
                     when "001" =>
-                        -- 64x64 pixel squares using bit 6 for checkerboard pattern
-                        if (x(6) xor y(6)) = '1' then
+                        -- 100x100 pixel squares (800÷100=8 across, 480÷100=4.8 down)
+                        -- Use bits 6:5 to create 4x4 pattern of 100x100 squares
+                        if ((x(6) xor x(5)) xor (y(6) xor y(5))) = '1' then
                             red <= x"FF"; green <= x"FF"; blue <= x"FF";  -- White
                         else
                             red <= x"00"; green <= x"00"; blue <= x"00";  -- Black
@@ -175,9 +201,9 @@ begin
                         x_block := resize(frame_counter & "00", 10);  -- Box X position
                         y_block := resize(frame_counter & "0", 10);   -- Box Y position
                         
-                        -- Draw a 64x64 box
-                        if (x >= x_block) and (x < x_block + 64) and 
-                           (y >= y_block) and (y < y_block + 64) then
+                        -- Draw a 80x80 box (proportional to 800x480)
+                        if (x >= x_block) and (x < x_block + 80) and 
+                           (y >= y_block) and (y < y_block + 60) then
                             -- Box color changes with position
                             red <= std_logic_vector(frame_counter);
                             green <= std_logic_vector(255 - frame_counter);
@@ -224,42 +250,42 @@ begin
     rgb_out <= red & green & blue;
 
     ----------------------------------------------------------------------------
-    -- Audio Generation (Pattern-specific tones)
+    -- VIC20NANO SIMPLIFIED AUDIO GENERATION
     ----------------------------------------------------------------------------
+    -- Simple single-tone audio generator matching VIC20Nano's approach
+    -- Uses constant 440 Hz tone for all patterns - much simpler and more stable
 
-    -- Select frequency divider based on pattern
-    with active_pattern select
-        audio_freq_div <=
-            x"0200" when "000",  -- Pattern 0: 440 Hz (A4)
-            x"01C0" when "001",  -- Pattern 1: 494 Hz (B4)
-            x"0190" when "010",  -- Pattern 2: 523 Hz (C5)
-            x"0160" when "011",  -- Pattern 3: 587 Hz (D5)
-            x"0140" when "100",  -- Pattern 4: 659 Hz (E5)
-            x"0120" when "101",  -- Pattern 5: 698 Hz (F5)
-            x"0200" when others; -- Default: 440 Hz
+    -- Fixed 440 Hz audio generation (VIC20Nano standard)
+    -- Frequency divider: 48000 / (2 * 440) = ~55 (x"0037")
+    audio_freq_div <= x"0037";  -- 440 Hz tone (A4 musical reference)
 
-    -- Audio tone generation
-    process(clk_audio, reset)
+    -- VIC20NANO SIMPLE PHASE ACCUMULATOR:
+    -- Use pixel clock with audio sample enable for proper timing
+    process(clk_pixel, reset)
     begin
         if reset = '1' then
             audio_phase_acc <= (others => '0');
             audio_amplitude <= (others => '0');
-        elsif rising_edge(clk_audio) then
-            -- Simple phase accumulator for tone generation
-            audio_phase_acc <= audio_phase_acc + audio_freq_div;
+        elsif rising_edge(clk_pixel) then
+            -- Audio sample enable from clk_audio rising edge
+            if clk_audio = '1' then
+                -- Simple phase accumulator
+                audio_phase_acc <= audio_phase_acc + audio_freq_div;
 
-            -- Generate sine-like tone using MSB as square wave approximation
-            if audio_phase_acc(15) = '1' then
-                audio_amplitude <= x"4000";  -- Positive amplitude
-            else
-                audio_amplitude <= x"C000";  -- Negative amplitude
+                -- Square wave generation using MSB
+                if audio_phase_acc(15) = '1' then
+                    audio_amplitude <= x"4000";  -- +50% amplitude
+                else
+                    audio_amplitude <= x"C000";  -- -50% amplitude
+                end if;
             end if;
         end if;
     end process;
 
-    -- Audio outputs (only when audio is enabled)
-    audio_left <= std_logic_vector(audio_amplitude) when audio_enable_in = '1' else (others => '0');
-    audio_right <= std_logic_vector(audio_amplitude) when audio_enable_in = '1' else (others => '0');
+    -- VIC20NANO AUDIO OUTPUT:
+    -- Direct audio output without conditional logic (simpler)
+    audio_left <= std_logic_vector(audio_amplitude);
+    audio_right <= std_logic_vector(audio_amplitude);
     audio_enable <= audio_enable_in;
 
 end rtl;

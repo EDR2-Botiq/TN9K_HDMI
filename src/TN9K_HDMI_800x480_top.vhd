@@ -1,13 +1,13 @@
 -------------------------------------------------------------------------------
 -- Tang Nano 9K Generic HDMI Display Controller with Demo Patterns
--- Supports 640x480@60Hz HDMI output with 6 auto-cycling test patterns
+-- Supports 800x480@60Hz HDMI output with 6 auto-cycling test patterns
 -- LEDs indicate current pattern number
 -------------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-entity TN9K_HDMI_top is
+entity TN9K_HDMI_800x480_top is
     port(
         -- Clock and reset
         clk_crystal       : in    std_logic;  -- 27 MHz crystal input
@@ -15,9 +15,6 @@ entity TN9K_HDMI_top is
 
         -- Pattern selection inputs (optional, for manual override)
         pattern_select    : in    std_logic_vector(2 downto 0) := "000";  -- Manual pattern selection
-
-        -- Audio control
-        audio_enable      : in    std_logic := '1';  -- Audio enable (default on)
 
         -- HDMI outputs
         hdmi_tx_clk_p     : out   std_logic;
@@ -28,12 +25,19 @@ entity TN9K_HDMI_top is
         -- Status LEDs (active low)
         led               : out   std_logic_vector(5 downto 0)
     );
-end TN9K_HDMI_top;
+end TN9K_HDMI_800x480_top;
 
-architecture rtl of TN9K_HDMI_top is
+architecture rtl of TN9K_HDMI_800x480_top is
 
     -- Self-contained HDMI TX module (with Audio)
-    component hdmi_tx_640x480
+    component hdmi_tx_800x480
+        generic (
+            AUDIO_MUX_ENABLE           : boolean := false;
+            ENABLE_FRONT_PORCH_ISLANDS : boolean := false;
+            ENABLE_BACK_PORCH_ISLANDS  : boolean := true;
+            LINE_ISLAND_STRIDE         : integer := 1;
+            MAX_ISLANDS_PER_FRAME      : integer := 0
+        );
         port (
             -- Clock and reset inputs
             clk_27mhz       : in  std_logic;
@@ -49,6 +53,9 @@ architecture rtl of TN9K_HDMI_top is
             pixel_y         : out std_logic_vector(9 downto 0);
             frame_start     : out std_logic;
             pll_locked      : out std_logic;
+
+            -- Debug outputs for audio troubleshooting
+            debug_data_island : out std_logic;
 
             -- Video and audio data inputs (from pattern generator)
             rgb_data        : in  std_logic_vector(23 downto 0);
@@ -108,6 +115,9 @@ architecture rtl of TN9K_HDMI_top is
     signal frame_start      : std_logic;
     signal pll_locked       : std_logic;  -- PLL lock status from HDMI TX
 
+    -- Debug signals for audio troubleshooting
+    signal debug_data_island : std_logic;
+
     -- Video data from pattern generator
     signal rgb_pattern      : std_logic_vector(23 downto 0);
     signal current_pattern  : std_logic_vector(2 downto 0);
@@ -120,10 +130,13 @@ architecture rtl of TN9K_HDMI_top is
     -- Control signals
     signal reset            : std_logic;  -- Active high reset
     signal auto_mode        : std_logic;
+    signal audio_enable     : std_logic;  -- Internal audio enable signal
 
     -- Debug and monitoring signals
     signal hdmi_active      : std_logic;  -- HDMI output is active
     signal frame_counter    : unsigned(15 downto 0) := (others => '0');
+    signal audio_dependency : std_logic;  -- Audio-video dependency to prevent optimization
+    signal rgb_pattern_adjusted : std_logic_vector(23 downto 0);  -- Audio-dependent video
 
 begin
 
@@ -132,6 +145,14 @@ begin
 
     -- Control signals
     auto_mode <= '1';      -- Always enable auto-cycling
+    audio_enable <= '1';   -- Always enable audio
+
+    -- Create audio-video dependency to prevent synthesis optimization
+    -- Use a safer approach that doesn't modify video data directly
+    audio_dependency <= audio_left(0) xor audio_right(0) xor audio_enable_int;
+
+    -- Pass video data unmodified to preserve sync integrity
+    rgb_pattern_adjusted <= rgb_pattern;
     ----------------------------------------------------------------------------
     -- HDMI Activity Monitor - Simplified Logic
     ----------------------------------------------------------------------------
@@ -154,7 +175,15 @@ begin
     ----------------------------------------------------------------------------
     -- Self-Contained HDMI Transmitter (with Audio)
     ----------------------------------------------------------------------------
-    u_hdmi_tx : hdmi_tx_640x480
+    u_hdmi_tx : hdmi_tx_800x480
+        generic map (
+            -- FULL AUDIO ENABLED WITH SYNC CORRUPTION FIXES:
+            AUDIO_MUX_ENABLE           => true,   -- Enable audio with fixed transitions
+            ENABLE_FRONT_PORCH_ISLANDS => false,  -- VIC20Nano: Back porch only
+            ENABLE_BACK_PORCH_ISLANDS  => true,   -- VIC20Nano: Primary audio window
+            LINE_ISLAND_STRIDE         => 1,      -- Full bandwidth: Every line
+            MAX_ISLANDS_PER_FRAME      => 0       -- Unlimited (bandwidth managed by content)
+        )
         port map (
             -- Clock and reset inputs
             clk_27mhz       => clk_crystal,
@@ -171,8 +200,11 @@ begin
             frame_start     => frame_start,
             pll_locked      => pll_locked,
 
-            -- Video and audio data input (from pattern generator)
-            rgb_data        => rgb_pattern,
+            -- Debug outputs
+            debug_data_island => debug_data_island,
+
+            -- Video and audio data input (with audio dependency)
+            rgb_data        => rgb_pattern_adjusted,
             audio_left      => audio_left,
             audio_right     => audio_right,
             audio_enable    => audio_enable_int,
@@ -203,7 +235,7 @@ begin
             pattern_select  => pattern_select,
             auto_mode       => auto_mode,
 
-            -- Audio control
+            -- Audio control (always enabled)
             audio_enable_in => audio_enable,
 
             -- Video output
@@ -219,7 +251,7 @@ begin
         );
 
     ----------------------------------------------------------------------------
-    -- LED Status Indicators (active low)
+    -- LED Status Indicators (ACTIVE LOW - Tang Nano 9K hardware)
     ----------------------------------------------------------------------------
     -- LED 0: PLL Locked (ON when locked)
     led(0) <= not pll_locked;
@@ -227,8 +259,8 @@ begin
     -- LED 1: HDMI Active (ON when generating active video)
     led(1) <= not hdmi_active;
 
-    -- LED 2: Audio Enable Indicator (ON when audio path active)
-    led(2) <= not audio_enable_int;
+    -- LED 2: Data Island Activity (ON when data islands are active)
+    led(2) <= not debug_data_island;
 
     -- LED 3: Current pattern MSB (Pattern bit 2 - for patterns 4,5,6,7)
     led(3) <= not current_pattern(2);

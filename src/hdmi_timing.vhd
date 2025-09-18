@@ -1,14 +1,14 @@
 -------------------------------------------------------------------------------
--- HDMI Timing Generator for 640x480@60Hz
+-- HDMI Timing Generator for 800x480@60Hz
 -- Generates pixel clock, sync signals, and data enable for HDMI output
 -------------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-entity HDMI_TIMING is
+entity HDMI_TIMING_800x480 is
     port (
-        clk_pixel       : in  std_logic;  -- 25.2 MHz HDMI pixel clock
+        clk_pixel       : in  std_logic;  -- 32.186 MHz HDMI pixel clock
         reset         : in  std_logic;
         
         -- Video timing outputs
@@ -24,22 +24,22 @@ entity HDMI_TIMING is
         frame_start   : out std_logic;
         line_start    : out std_logic
     );
-end HDMI_TIMING;
+end HDMI_TIMING_800x480;
 
-architecture RTL of HDMI_TIMING is
+architecture RTL of HDMI_TIMING_800x480 is
 
-    -- VGA 640x480@60Hz timing parameters
-    constant H_VISIBLE    : integer := 640;   -- Visible pixels
-    constant H_FRONT      : integer := 16;    -- Front porch
-    constant H_SYNC_WIDTH : integer := 96;    -- Sync pulse width  
-    constant H_BACK       : integer := 48;    -- Back porch
-    constant H_TOTAL      : integer := 800;   -- Total line time
-    
+    -- HDMI 800x480@60Hz timing parameters (VIC20Nano compatible)
+    constant H_VISIBLE    : integer := 800;   -- Visible pixels
+    constant H_FRONT      : integer := 40;    -- Front porch
+    constant H_SYNC_WIDTH : integer := 128;   -- Sync pulse width
+    constant H_BACK       : integer := 88;    -- Back porch
+    constant H_TOTAL      : integer := 1056;  -- Total line time
+
     constant V_VISIBLE    : integer := 480;   -- Visible lines
-    constant V_FRONT      : integer := 10;    -- Front porch
-    constant V_SYNC_WIDTH : integer := 2;     -- Sync pulse width
-    constant V_BACK       : integer := 33;    -- Back porch  
-    constant V_TOTAL      : integer := 525;   -- Total frame time
+    constant V_FRONT      : integer := 1;     -- Front porch
+    constant V_SYNC_WIDTH : integer := 4;     -- Sync pulse width
+    constant V_BACK       : integer := 23;    -- Back porch
+    constant V_TOTAL      : integer := 508;   -- Total frame time
     
     -- Counters
     signal h_count : integer range 0 to H_TOTAL-1 := 0;
