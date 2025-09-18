@@ -7,6 +7,9 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity TMDS_ENCODER is
+    generic (
+        PIPELINE_BALANCE : boolean := false  -- When true, inserts an extra register between stages
+    );
     port (
         clk     : in  std_logic;
         reset   : in  std_logic;
@@ -38,6 +41,8 @@ architecture RTL of TMDS_ENCODER is
     
     signal dc_bias : signed(7 downto 0) := (others => '0');
     signal q_m : std_logic_vector(8 downto 0);
+    signal q_m_reg : std_logic_vector(8 downto 0) := (others => '0');
+    signal q_m_stage : std_logic_vector(8 downto 0);
     -- Optimized: Use unsigned instead of integer for better synthesis
     signal ones_count : unsigned(3 downto 0);  -- 0-8 needs 4 bits
     signal zeros_count : unsigned(3 downto 0); -- 0-8 needs 4 bits  
@@ -91,8 +96,22 @@ begin
         end if;
     end process;
     
-    -- Count ones and zeros in q_m[7:0] (VHDL-93 compatible)
-    ones_count <= count_ones(q_m(7 downto 0));
+    -- Optional pipeline register between stage 1 and stage 2 for higher clock targets
+    process(clk, reset)
+    begin
+        if reset = '1' then
+            q_m_reg <= (others => '0');
+        elsif rising_edge(clk) then
+            if PIPELINE_BALANCE then
+                q_m_reg <= q_m;
+            end if;
+        end if;
+    end process;
+
+    q_m_stage <= q_m when (not PIPELINE_BALANCE) else q_m_reg;
+
+    -- Count ones and zeros in selected stage output
+    ones_count <= count_ones(q_m_stage(7 downto 0));
     zeros_count <= "1000" - ones_count;  -- 8 as unsigned(3:0)
     
     -- Stage 2: DC balance (VHDL-93 compatible)
@@ -125,28 +144,28 @@ begin
                 end if;
                 
                 if dc_bias = "00000000" or ones_count = "0100" then  -- 4 as unsigned
-                    if q_m(8) = '0' then
+                    if q_m_stage(8) = '0' then
                         q_out(9) <= '1';
                         q_out(8) <= '0';
-                        q_out(7 downto 0) <= not q_m(7 downto 0);
+                        q_out(7 downto 0) <= not q_m_stage(7 downto 0);
                         dc_bias <= dc_bias - bias_adjust;
                     else
                         q_out(9) <= '0';
                         q_out(8) <= '1';
-                        q_out(7 downto 0) <= q_m(7 downto 0);
+                        q_out(7 downto 0) <= q_m_stage(7 downto 0);
                         dc_bias <= dc_bias + bias_adjust;
                     end if;
                 else
                     if (dc_bias > "00000000" and ones_count > "0100") or 
                        (dc_bias < "00000000" and ones_count < "0100") then
                         q_out(9) <= '1';
-                        q_out(8) <= q_m(8);
-                        q_out(7 downto 0) <= not q_m(7 downto 0);
+                        q_out(8) <= q_m_stage(8);
+                        q_out(7 downto 0) <= not q_m_stage(7 downto 0);
                         dc_bias <= dc_bias - bias_adjust;
                     else
                         q_out(9) <= '0';
-                        q_out(8) <= q_m(8);
-                        q_out(7 downto 0) <= q_m(7 downto 0);
+                        q_out(8) <= q_m_stage(8);
+                        q_out(7 downto 0) <= q_m_stage(7 downto 0);
                         dc_bias <= dc_bias + bias_adjust;
                     end if;
                 end if;

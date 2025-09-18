@@ -16,6 +16,9 @@ entity TN9K_HDMI_top is
         -- Pattern selection inputs (optional, for manual override)
         pattern_select    : in    std_logic_vector(2 downto 0) := "000";  -- Manual pattern selection
 
+        -- Audio control
+        audio_enable      : in    std_logic := '1';  -- Audio enable (default on)
+
         -- HDMI outputs
         hdmi_tx_clk_p     : out   std_logic;
         hdmi_tx_clk_n     : out   std_logic;
@@ -78,6 +81,9 @@ architecture rtl of TN9K_HDMI_top is
             pattern_select  : in  std_logic_vector(2 downto 0);
             auto_mode       : in  std_logic;
 
+            -- Audio control
+            audio_enable_in : in  std_logic;
+
             -- Video output
             rgb_out         : out std_logic_vector(23 downto 0);
 
@@ -109,7 +115,7 @@ architecture rtl of TN9K_HDMI_top is
     -- Audio data from pattern generator
     signal audio_left       : std_logic_vector(15 downto 0);
     signal audio_right      : std_logic_vector(15 downto 0);
-    signal audio_enable     : std_logic;
+    signal audio_enable_int : std_logic;  -- Internal audio enable from pattern gen
 
     -- Control signals
     signal reset            : std_logic;  -- Active high reset
@@ -127,21 +133,19 @@ begin
     -- Control signals
     auto_mode <= '1';      -- Always enable auto-cycling
     ----------------------------------------------------------------------------
-    -- HDMI Activity Monitor
+    -- HDMI Activity Monitor - Simplified Logic
     ----------------------------------------------------------------------------
+    -- Direct combinatorial logic to avoid clock domain issues
+    hdmi_active <= pll_locked and de;
+
+    -- Frame counter for LED blinking (only when system is active)
     process(clk_pixel, reset)
     begin
         if reset = '1' then
-            hdmi_active <= '0';
             frame_counter <= (others => '0');
         elsif rising_edge(clk_pixel) then
-            -- HDMI is active if we're generating pixels
-            if de = '1' then
-                hdmi_active <= '1';
-            end if;
-
             -- Count frame starts for LED blinking
-            if frame_start = '1' then
+            if frame_start = '1' and pll_locked = '1' then
                 frame_counter <= frame_counter + 1;
             end if;
         end if;
@@ -171,7 +175,7 @@ begin
             rgb_data        => rgb_pattern,
             audio_left      => audio_left,
             audio_right     => audio_right,
-            audio_enable    => audio_enable,
+            audio_enable    => audio_enable_int,
 
             -- HDMI differential outputs
             hdmi_tx_clk_p   => hdmi_tx_clk_p,
@@ -199,13 +203,16 @@ begin
             pattern_select  => pattern_select,
             auto_mode       => auto_mode,
 
+            -- Audio control
+            audio_enable_in => audio_enable,
+
             -- Video output
             rgb_out         => rgb_pattern,
 
             -- Audio output
             audio_left      => audio_left,
             audio_right     => audio_right,
-            audio_enable    => audio_enable,
+            audio_enable    => audio_enable_int,
 
             -- Status
             current_pattern => current_pattern
@@ -221,8 +228,7 @@ begin
     led(1) <= not hdmi_active;
 
     -- LED 2: Audio Enable Indicator (ON when audio path active)
-    -- Audio is always enabled in current design so drive ON
-    led(2) <= '0';  -- Active low LED: 0 = ON
+    led(2) <= not audio_enable_int;
 
     -- LED 3: Current pattern MSB (Pattern bit 2 - for patterns 4,5,6,7)
     led(3) <= not current_pattern(2);

@@ -5,9 +5,9 @@
 -- Features:
 -- - Fixed 640x480@60Hz video timing generation
 -- - Simple audio support with HDMI embedding (fixed timing issues)
--- - Clock generation: 27MHz -> 126MHz TMDS -> 25.2MHz pixel
+-- - Clock generation: 27MHz -> 126MHz TMDS -> 25.2MHz pixel (near-exact VESA timing)
 -- - Audio data islands during blanking periods
--- - Complete differential HDMI output
+-- - Complete differential HDMI output with proper OSER10 serialization
 --------------------------------------------------------------------------------
 
 library ieee;
@@ -21,7 +21,7 @@ entity hdmi_tx_640x480 is
         reset_n         : in  std_logic;  -- Active low reset
 
         -- Clock and timing outputs (for external pattern generator)
-        clk_pixel       : out std_logic;  -- 25.175 MHz pixel clock
+        clk_pixel       : out std_logic;  -- 25.2 MHz pixel clock (near VESA standard)
         clk_audio       : out std_logic;  -- 48 kHz audio sample clock
         hsync           : out std_logic;  -- Horizontal sync
         vsync           : out std_logic;  -- Vertical sync
@@ -50,7 +50,7 @@ architecture rtl of hdmi_tx_640x480 is
     -- Clock generation components
     component Gowin_TMDS_rPLL
         port (
-            clkout  : out std_logic;  -- 125.875 MHz TMDS clock
+            clkout  : out std_logic;  -- 126 MHz TMDS clock (corrected)
             lock    : out std_logic;  -- PLL lock status
             clkin   : in  std_logic   -- 27 MHz input clock
         );
@@ -58,14 +58,14 @@ architecture rtl of hdmi_tx_640x480 is
 
     component Gowin_HDMI_CLKDIV
         port (
-            clkout  : out std_logic;  -- 25.175 MHz pixel clock
-            hclkin  : in  std_logic;  -- 125.875 MHz input
+            clkout  : out std_logic;  -- 25.2 MHz pixel clock (126/5)
+            hclkin  : in  std_logic;  -- 126 MHz TMDS input
             resetn  : in  std_logic   -- Active low reset
         );
     end component;
 
     -- HDMI timing generator component
-    component hdmi_timing
+    component HDMI_TIMING
         port (
             clk_pixel    : in  std_logic;
             reset        : in  std_logic;
@@ -81,6 +81,9 @@ architecture rtl of hdmi_tx_640x480 is
 
     -- TMDS encoder
     component tmds_encoder
+        generic (
+            PIPELINE_BALANCE : boolean := false
+        );
         port (
             clk       : in  std_logic;
             reset     : in  std_logic;
@@ -113,6 +116,7 @@ architecture rtl of hdmi_tx_640x480 is
             hsync           : in  std_logic;
             vsync           : in  std_logic;
             de              : in  std_logic;
+            pixel_y         : in  std_logic_vector(9 downto 0);
             aud_l           : in  std_logic_vector(15 downto 0);
             aud_r           : in  std_logic_vector(15 downto 0);
             aud_sample_stb  : in  std_logic;
@@ -152,8 +156,8 @@ architecture rtl of hdmi_tx_640x480 is
     end component;
 
     -- Internal clock signals
-    signal clk_tmds_serial  : std_logic;  -- 125.875 MHz TMDS clock
-    signal clk_pixel_int    : std_logic;  -- 25.175 MHz pixel clock
+    signal clk_tmds_serial  : std_logic;  -- 126 MHz TMDS clock
+    signal clk_pixel_int    : std_logic;  -- 25.2 MHz pixel clock
     signal pll_lock_int     : std_logic;  -- PLL lock status
     signal reset_int        : std_logic;  -- Internal active high reset
     signal reset_sync       : std_logic;  -- Synchronized reset
@@ -210,10 +214,12 @@ architecture rtl of hdmi_tx_640x480 is
     -- Reset synchronization registers
     signal reset_meta       : std_logic := '1';
     signal reset_sync_reg   : std_logic := '1';
+    signal pll_lock_sync    : std_logic := '0';
+    signal pll_lock_meta    : std_logic := '0';
 
     -- Audio clock generation (corrected for 25.2 MHz)
     signal audio_counter    : unsigned(15 downto 0) := (others => '0');
-    constant AUDIO_DIV      : integer := 525;  -- 25200000/48000 = 525
+    constant AUDIO_DIV      : integer := 262;  -- 25200000/(48000*2) = 262.5, use 262 for ~48.08kHz
     signal audio_clk_toggle : std_logic := '0';
 
 begin
@@ -236,7 +242,7 @@ begin
     -- Clock Generation
     ----------------------------------------------------------------------------
 
-    -- TMDS PLL: 27 MHz -> 126.0 MHz
+    -- TMDS PLL: 27 MHz -> 126.0 MHz (exact calculation: 27*(13+1)/(0+1)/(2+1) = 378/3 = 126 MHz)
     u_rpll : Gowin_TMDS_rPLL
         port map (
             clkout => clk_tmds_serial,
@@ -244,7 +250,7 @@ begin
             clkin  => clk_27mhz
         );
 
-    -- Clock divider: 126.0 MHz / 5 -> 25.2 MHz
+    -- Clock divider: 126.0 MHz / 5 -> 25.2 MHz (very close to VESA 25.175 MHz)
     u_clkdiv : Gowin_HDMI_CLKDIV
         port map (
             clkout => clk_pixel_int,
@@ -252,25 +258,40 @@ begin
             resetn => reset_n
         );
 
+    -- PLL lock synchronization to pixel clock domain
+    process(clk_pixel_int, reset_int)
+    begin
+        if reset_int = '1' then
+            pll_lock_meta <= '0';
+            pll_lock_sync <= '0';
+        elsif rising_edge(clk_pixel_int) then
+            pll_lock_meta <= pll_lock_int;
+            pll_lock_sync <= pll_lock_meta;
+        end if;
+    end process;
+
     -- Reset synchronization to pixel clock domain
     process(clk_pixel_int, reset_int)
     begin
         if reset_int = '1' then
             reset_meta <= '1';
             reset_sync_reg <= '1';
-            reset_sync <= '1';
         elsif rising_edge(clk_pixel_int) then
-            reset_meta <= '0';
-            reset_sync_reg <= reset_meta;
-            reset_sync <= reset_sync_reg or not pll_lock_int;
+            if pll_lock_sync = '1' then
+                reset_meta <= '0';
+                reset_sync_reg <= reset_meta;
+            end if;
         end if;
     end process;
+
+    -- Final reset - only released when PLL is locked and synchronized
+    reset_sync <= reset_sync_reg;
 
     ----------------------------------------------------------------------------
     -- Video Timing Generation
     ----------------------------------------------------------------------------
 
-    u_timing : hdmi_timing
+    u_timing : HDMI_TIMING
         port map (
             clk_pixel   => clk_pixel_int,
             reset       => reset_sync,
@@ -333,6 +354,7 @@ begin
             hsync          => hsync_int,
             vsync          => vsync_int,
             de             => de_int,
+            pixel_y        => pixel_y_int,
             aud_l          => audio_left,
             aud_r          => audio_right,
             aud_sample_stb => audio_sample_strobe,
@@ -346,6 +368,7 @@ begin
         );
 
     encoder_red: tmds_encoder
+        generic map (PIPELINE_BALANCE => false)
         port map (
             clk     => clk_pixel_int,
             reset   => reset_sync,
@@ -357,6 +380,7 @@ begin
         );
 
     encoder_green: tmds_encoder
+        generic map (PIPELINE_BALANCE => false)
         port map (
             clk     => clk_pixel_int,
             reset   => reset_sync,
@@ -368,6 +392,7 @@ begin
         );
 
     encoder_blue: tmds_encoder
+        generic map (PIPELINE_BALANCE => false)
         port map (
             clk     => clk_pixel_int,
             reset   => reset_sync,
@@ -396,12 +421,12 @@ begin
         end if;
     end process;
 
-    -- Properly mux between TMDS (video) and TERC4 (audio data islands)
+    -- Temporarily disable audio for debugging - use pure TMDS video only
     -- TERC4 data is already 10-bit encoded, so mux after TMDS encoding
     -- Additional safety: only use TERC4 during safe periods
-    final_tmds_red   <= terc_ch2 when di_valid_safe = '1' else tmds_red;
-    final_tmds_green <= terc_ch1 when di_valid_safe = '1' else tmds_green;
-    final_tmds_blue  <= terc_ch0 when di_valid_safe = '1' else tmds_blue;
+    final_tmds_red   <= tmds_red;   -- Disable audio: terc_ch2 when di_valid_safe = '1' else tmds_red;
+    final_tmds_green <= tmds_green; -- Disable audio: terc_ch1 when di_valid_safe = '1' else tmds_green;
+    final_tmds_blue  <= tmds_blue;  -- Disable audio: terc_ch0 when di_valid_safe = '1' else tmds_blue;
 
     ----------------------------------------------------------------------------
     -- TMDS Serialization

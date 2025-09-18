@@ -21,6 +21,7 @@ entity hdmi_audio_packetizer is
         hsync           : in  std_logic;
         vsync           : in  std_logic;
         de              : in  std_logic;
+        pixel_y         : in  std_logic_vector(9 downto 0);  -- For proper vertical blank detection
 
         -- Stereo PCM input @48 kHz
         aud_l           : in  std_logic_vector(15 downto 0);
@@ -41,24 +42,45 @@ entity hdmi_audio_packetizer is
 end entity;
 
 architecture rtl of hdmi_audio_packetizer is
-    -- Very small FIFO for audio samples (stores most recent sample)
+    -- Sample currently being packetized
     signal l_sample, r_sample : std_logic_vector(15 downto 0);
-    signal l_hold, r_hold     : std_logic_vector(15 downto 0);
 
-    -- Enhanced state machine for proper HDMI data island timing
-    type state_t is (IDLE, WAIT_VBLANK, GB_LEAD, ACR, GB_DATA, ASP, GB_TRAIL, DONE);
+    -- State machine for multiple packet emission during vertical blank
+    type state_t is (IDLE, GB_LEAD, ACR, GB_DATA, ASP, GB_TRAIL, DONE);
     signal st : state_t := IDLE;
 
-    -- Counter within island and frame timing
+    -- Symbol counter within current sub-packet/phase
     signal sym_cnt : unsigned(9 downto 0) := (others => '0');
-    signal line_cnt : unsigned(9 downto 0) := (others => '0');
     signal data_island_enable : std_logic := '0';
-
-    -- Direct TERC4 encoding (inline to prevent optimization)
     signal terc_d0, terc_d1, terc_d2 : std_logic_vector(3 downto 0);
 
-    -- Helper to indicate blanking
-    signal in_blanking : std_logic;
+    -- Vertical blank detection (lines >= 480 for 640x480 timing)
+    signal vblank : std_logic;
+
+    -- Per-frame tracking
+    signal acr_sent_this_frame : std_logic := '0';
+    signal vblank_prev         : std_logic := '0';
+    signal vblank_line         : unsigned(9 downto 0) := (others => '0');
+    signal packets_emitted     : unsigned(9 downto 0) := (others => '0');
+    constant TARGET_PACKETS_PER_FRAME : integer := 48; -- Aim ~ one ASP per sample group
+    constant VBLANK_LINES              : integer := 45; -- Approx lines in vertical blank region
+    signal line_stride        : unsigned(9 downto 0);
+    signal next_line_trigger  : unsigned(9 downto 0) := (others => '0');
+
+    -- Small FIFO (depth 64) to accumulate 48 kHz samples
+    type sample_t is record
+        l : std_logic_vector(15 downto 0);
+        r : std_logic_vector(15 downto 0);
+    end record;
+    type fifo_t is array (0 to 63) of sample_t;
+    signal fifo_mem   : fifo_t;
+    signal wr_ptr     : unsigned(5 downto 0) := (others => '0');
+    signal rd_ptr     : unsigned(5 downto 0) := (others => '0');
+    signal fifo_count : unsigned(6 downto 0) := (others => '0');
+    signal fifo_pop   : std_logic := '0';
+    signal fifo_push  : std_logic := '0';
+    signal fifo_empty : std_logic;
+    signal fifo_full  : std_logic;
 
     -- TERC4 encoding function
     function terc4_encode(d : std_logic_vector(3 downto 0)) return std_logic_vector is
@@ -84,34 +106,75 @@ architecture rtl of hdmi_audio_packetizer is
     end function;
 
 begin
+    -- FIFO status signals
+    process(fifo_count)
+    begin
+        if fifo_count = 0 then
+            fifo_empty <= '1';
+        else
+            fifo_empty <= '0';
+        end if;
+
+        if fifo_count = 64 then
+            fifo_full <= '1';
+        else
+            fifo_full <= '0';
+        end if;
+    end process;
+
+    -- FIFO control
+    process(aud_sample_stb, fifo_full)
+    begin
+        fifo_push <= aud_sample_stb and (not fifo_full);
+    end process;
+
     -- Direct TERC4 encoding to prevent optimization
-    terc_ch0 <= terc4_encode(terc_d0) when data_island_enable = '1' else (others => '0');
-    terc_ch1 <= terc4_encode(terc_d1) when data_island_enable = '1' else (others => '0');
-    terc_ch2 <= terc4_encode(terc_d2) when data_island_enable = '1' else (others => '0');
+    process(data_island_enable, terc_d0, terc_d1, terc_d2)
+    begin
+        if data_island_enable = '1' then
+            terc_ch0 <= terc4_encode(terc_d0);
+            terc_ch1 <= terc4_encode(terc_d1);
+            terc_ch2 <= terc4_encode(terc_d2);
+        else
+            terc_ch0 <= (others => '0');
+            terc_ch1 <= (others => '0');
+            terc_ch2 <= (others => '0');
+        end if;
+    end process;
 
-    -- Only insert data islands during vertical blanking period
-    -- Horizontal blanking is too short for proper audio data islands
-    -- Use vertical blanking period when vsync is active (lines 491-524)
-    in_blanking <= not vsync;
+    -- Determine vertical blank region using pixel_y >= 480
+    process(pixel_y)
+    begin
+        if unsigned(pixel_y) >= 480 then
+            vblank <= '1';
+        else
+            vblank <= '0';
+        end if;
+    end process;
 
-    -- Latch incoming audio samples
+    -- Latch incoming audio samples into FIFO
     process(clk_pix)
     begin
         if rising_edge(clk_pix) then
-            if aud_sample_stb = '1' then
-                l_hold <= aud_l;
-                r_hold <= aud_r;
+            if fifo_push = '1' then
+                fifo_mem(to_integer(wr_ptr)).l <= aud_l;
+                fifo_mem(to_integer(wr_ptr)).r <= aud_r;
+                wr_ptr <= wr_ptr + 1;
+                fifo_count <= fifo_count + 1;
+            end if;
+            if fifo_pop = '1' and fifo_empty = '0' then
+                rd_ptr <= rd_ptr + 1;
+                fifo_count <= fifo_count - 1;
             end if;
         end if;
     end process;
 
-    -- Crude scheduler: start DI near each line blanking when audio_enable
+    -- Scheduler distributing packets across vertical blank
     process(clk_pix, reset)
     begin
         if reset = '1' then
             st <= IDLE;
             sym_cnt <= (others => '0');
-            line_cnt <= (others => '0');
             di_valid <= '0';
             data_island_enable <= '0';
             terc_d0 <= (others => '0');
@@ -119,32 +182,46 @@ begin
             terc_d2 <= (others => '0');
             l_sample <= (others => '0');
             r_sample <= (others => '0');
+            acr_sent_this_frame <= '0';
+            vblank_prev <= '0';
+            vblank_line <= (others => '0');
+            packets_emitted <= (others => '0');
+            next_line_trigger <= (others => '0');
         elsif rising_edge(clk_pix) then
-            -- Track line position for proper data island timing
-            if hsync = '0' and vsync = '1' then  -- During hsync pulse in vblank
-                line_cnt <= line_cnt + 1;
-            elsif vsync = '0' then  -- Reset at start of active video
-                line_cnt <= (others => '0');
+            fifo_pop <= '0';
+
+            -- Detect vblank rising edge
+            if vblank = '1' and vblank_prev = '0' then
+                vblank_line <= (others => '0');
+                packets_emitted <= (others => '0');
+                acr_sent_this_frame <= '0';
+                -- Compute stride ~ VBLANK_LINES / TARGET_PACKETS_PER_FRAME (ceiling)
+                if TARGET_PACKETS_PER_FRAME > 0 then
+                    line_stride <= to_unsigned( (VBLANK_LINES + TARGET_PACKETS_PER_FRAME - 1) / TARGET_PACKETS_PER_FRAME, 10);
+                else
+                    line_stride <= to_unsigned(4,10);
+                end if;
+                next_line_trigger <= (others => '0');
+            elsif vblank = '1' and hsync = '0' then
+                vblank_line <= vblank_line + 1;
             end if;
+            vblank_prev <= vblank;
 
             case st is
                 when IDLE =>
                     di_valid <= '0';
                     sym_cnt  <= (others => '0');
                     data_island_enable <= '0';
-                    -- Only start data islands during vertical blanking with proper spacing
-                    if (in_blanking = '1' and audio_enable = '1' and line_cnt = 5) then
-                        st <= WAIT_VBLANK;
-                    end if;
-
-                when WAIT_VBLANK =>
-                    -- Wait for proper timing within vblank period
-                    if hsync = '1' then  -- Start after hsync pulse
-                        -- Capture the latest sample for this island
-                        l_sample <= l_hold;
-                        r_sample <= r_hold;
-                        data_island_enable <= '1';
-                        st <= GB_LEAD;
+                    if vblank = '1' and audio_enable = '1' and fifo_empty = '0' then
+                        if vblank_line = next_line_trigger and packets_emitted < to_unsigned(TARGET_PACKETS_PER_FRAME, packets_emitted'length) then
+                            -- Load next sample
+                            l_sample <= fifo_mem(to_integer(rd_ptr)).l;
+                            r_sample <= fifo_mem(to_integer(rd_ptr)).r;
+                            fifo_pop <= '1';
+                            data_island_enable <= '1';
+                            st <= GB_LEAD;
+                            next_line_trigger <= vblank_line + line_stride; -- schedule next
+                        end if;
                     end if;
 
                 when GB_LEAD =>
@@ -154,9 +231,13 @@ begin
                     terc_d1 <= "1010";
                     terc_d2 <= "1010";
                     sym_cnt <= sym_cnt + 1;
-                    if sym_cnt = 1 then  -- Shorter leading guard band
+                    if sym_cnt = 1 then
                         sym_cnt <= (others => '0');
-                        st <= ACR;
+                        if acr_sent_this_frame = '0' then
+                            st <= ACR;
+                        else
+                            st <= GB_DATA; -- Skip ACR after first per frame
+                        end if;
                     end if;
 
                 when ACR =>
@@ -176,6 +257,7 @@ begin
                         sym_cnt <= sym_cnt + 1;
                     else
                         sym_cnt <= (others => '0');
+                        acr_sent_this_frame <= '1';
                         st <= GB_DATA;
                     end if;
 
@@ -218,17 +300,20 @@ begin
                     sym_cnt <= sym_cnt + 1;
                     if sym_cnt = 1 then
                         sym_cnt <= (others => '0');
+                        packets_emitted <= packets_emitted + 1;
                         st <= DONE;
                     end if;
 
                 when DONE =>
                     di_valid <= '0';
                     data_island_enable <= '0';
-                    -- Clear TERC4 outputs to prevent persistence
                     terc_d0 <= (others => '0');
                     terc_d1 <= (others => '0');
                     terc_d2 <= (others => '0');
-                    if vsync = '0' then  -- Wait for end of vertical blanking
+                    -- Immediately allow more packets in same vblank or wait for next frame
+                    if vblank = '0' then
+                        st <= IDLE;
+                    else
                         st <= IDLE;
                     end if;
             end case;
@@ -236,9 +321,9 @@ begin
             -- Safety: Clear TERC4 outputs when not in active data island
             -- But ensure they're never all zero to prevent optimization
             if data_island_enable = '0' then
-                terc_d0 <= "0000";
-                terc_d1 <= "0000";
-                terc_d2 <= "0000";
+                terc_d0 <= (others => '0');
+                terc_d1 <= (others => '0');
+                terc_d2 <= (others => '0');
             end if;
         end if;
     end process;

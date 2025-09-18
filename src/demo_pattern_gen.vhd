@@ -24,6 +24,9 @@ entity demo_pattern_gen is
         pattern_select  : in  std_logic_vector(2 downto 0);  -- Manual pattern selection
         auto_mode       : in  std_logic;  -- Enable automatic pattern cycling
 
+        -- Audio control
+        audio_enable_in : in  std_logic;  -- Audio enable control
+
         -- Video output
         rgb_out         : out std_logic_vector(23 downto 0);  -- 24-bit RGB output
 
@@ -254,9 +257,9 @@ begin
         end if;
     end process;
 
-    -- Audio outputs
-    audio_left <= std_logic_vector(audio_amplitude);
-    audio_right <= std_logic_vector(audio_amplitude);
-    audio_enable <= '1';  -- Always enable audio
+    -- Audio outputs (only when audio is enabled)
+    audio_left <= std_logic_vector(audio_amplitude) when audio_enable_in = '1' else (others => '0');
+    audio_right <= std_logic_vector(audio_amplitude) when audio_enable_in = '1' else (others => '0');
+    audio_enable <= audio_enable_in;
 
 end rtl;

@@ -11,6 +11,24 @@
 # Primary 27 MHz crystal oscillator input
 create_clock -name clk_crystal -period 37.037 -waveform {0 18.518} [get_ports {clk_crystal}]
 
+# Generated clocks (informational - Gowin will derive automatically)
+# TMDS PLL: 27 MHz -> 126 MHz (period = 7.937 ns, exact calculation)
+# Pixel Clock Divider: 126 MHz ÷ 5 -> 25.2 MHz (period = 39.683 ns, exact for VESA timing)
+
+################################################################################
+# 1a. Generated Clocks (Informational – tool may infer automatically)
+################################################################################
+# NOTE: Replace hierarchical pin paths with actual post-synthesis names if different.
+# These are advisory so timing reports show proper derived domains.
+
+# Simplified SDC for Gowin compatibility
+# Complex generated clocks handled automatically by Gowin tools
+
+# Simple divided audio toggle clock (exposed mainly for reference). If kept as a port,
+# you can uncomment below after verifying instance names.
+# create_generated_clock -name clk_audio -source [get_pins {u_hdmi_tx/u_clkdiv/clkout}] \
+#     -divide_by 1050 [get_ports {clk_audio}]
+
 ################################################################################
 # 2. Clock Constraints (Primary Input Only)
 ################################################################################

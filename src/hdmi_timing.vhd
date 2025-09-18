@@ -8,7 +8,7 @@ use ieee.numeric_std.all;
 
 entity HDMI_TIMING is
     port (
-        clk_pixel       : in  std_logic;  -- 25 MHz HDMI pixel clock
+        clk_pixel       : in  std_logic;  -- 25.2 MHz HDMI pixel clock
         reset         : in  std_logic;
         
         -- Video timing outputs

@@ -1,11 +1,11 @@
 --Copyright (C)2014-2025 Gowin Semiconductor Corporation.
 --All rights reserved.
 --File Title: IP file
---Tool Version: V1.9.11.03 Education
+--Tool Version: V1.9.12 (64-bit)
 --Part Number: GW1NR-LV9QN88PC6/I5
 --Device: GW1NR-9
 --Device Version: C
---Created Time: Sun Sep  7 23:37:35 2025
+--Created Time: Thu Sep 18 22:10:19 2025
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -86,28 +86,18 @@ begin
     DUTYDA_i <= gw_gnd & gw_gnd & gw_gnd & gw_gnd;
     FDLY_i <= gw_gnd & gw_gnd & gw_gnd & gw_gnd;
 
-    -- Corrected PLL configuration for proper HDMI timing
-    -- Input: 27 MHz
-    -- Formula: CLKOUT = FCLKIN * (FBDIV_SEL + 1) / (IDIV_SEL + 1)
-    --          VCO = (FCLKIN * (FBDIV_SEL + 1) * ODIV_SEL) / (IDIV_SEL + 1)
-    -- IDIV_SEL = 2: 27 / (2+1) = 9 MHz PFD
-    -- FBDIV_SEL = 13: multiply by (13+1) = 14
-    -- Result: CLKOUT = 27 * 14 / 3 = 126 MHz TMDS clock
-    -- VCO = 27 * 14 * 8 / 3 = 1008 MHz (valid range)
-    -- Pixel clock = 126 / 5 = 25.2 MHz (0.1% error from 25.175 MHz)
-
     rpll_inst: rPLL
         generic map (
             FCLKIN => "27",
             DEVICE => "GW1NR-9C",
             DYN_IDIV_SEL => "false",
-            IDIV_SEL => 2,        -- Divide by 3
+            IDIV_SEL => 2,
             DYN_FBDIV_SEL => "false",
-            FBDIV_SEL => 13,      -- Multiply by 14
+            FBDIV_SEL => 13,
             DYN_ODIV_SEL => "false",
-            ODIV_SEL => 8,        -- ODIV = 8 for proper VCO frequency
+            ODIV_SEL => 4,
             PSDA_SEL => "0000",
-            DYN_DA_EN => "true",
+            DYN_DA_EN => "false",
             DUTYDA_SEL => "1000",
             CLKOUT_FT_DIR => '1',
             CLKOUTP_FT_DIR => '1',
@@ -127,8 +117,8 @@ begin
             CLKOUTP => clkoutp_o,
             CLKOUTD => clkoutd_o,
             CLKOUTD3 => clkoutd3_o,
-            RESET => gw_gnd,
-            RESET_P => gw_gnd,
+            RESET => gw_gnd,     -- Keep grounded for free-running PLL
+            RESET_P => gw_gnd,   -- Keep grounded for free-running PLL
             CLKIN => clkin,
             CLKFB => gw_gnd,
             FBDSEL => FBDSEL_i,
