@@ -159,7 +159,7 @@ begin
     ----------------------------------------------------------------------------
     u_hdmi_tx : hdmi_tx_640x480
         generic map (
-            AUDIO_MUX_ENABLE => false   -- Disable HDMI audio embedding
+            AUDIO_MUX_ENABLE => false   -- Disable audio to establish video baseline
         )
         port map (
             -- Clock and reset inputs
