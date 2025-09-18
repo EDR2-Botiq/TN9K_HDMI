@@ -34,6 +34,9 @@ architecture rtl of TN9K_HDMI_top is
 
     -- Self-contained HDMI TX module (with Audio)
     component hdmi_tx_640x480
+        generic (
+            AUDIO_MUX_ENABLE : boolean := false
+        );
         port (
             -- Clock and reset inputs
             clk_27mhz       : in  std_logic;
@@ -155,6 +158,9 @@ begin
     -- Self-Contained HDMI Transmitter (with Audio)
     ----------------------------------------------------------------------------
     u_hdmi_tx : hdmi_tx_640x480
+        generic map (
+            AUDIO_MUX_ENABLE => false   -- Disable HDMI audio embedding
+        )
         port map (
             -- Clock and reset inputs
             clk_27mhz       => clk_crystal,
@@ -219,7 +225,7 @@ begin
         );
 
     ----------------------------------------------------------------------------
-    -- LED Status Indicators (active low)
+    -- LED Status Indicators (ACTIVE LOW - Tang Nano 9K hardware)
     ----------------------------------------------------------------------------
     -- LED 0: PLL Locked (ON when locked)
     led(0) <= not pll_locked;
