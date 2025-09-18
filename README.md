@@ -1,6 +1,6 @@
 # TN9K HDMI - Tang Nano 9K HDMI Library
 
-A complete, working HDMI transmitter implementation for the Tang Nano 9K FPGA board featuring auto-cycling demo patterns and extensive debug capabilities.
+A complete HDMI transmitter implementation for the Tang Nano 9K FPGA board featuring auto-cycling demo patterns, simplified HDMI audio (48 kHz tone via data islands) and extensive debug capabilities.
 
 ## Overview
 
@@ -9,6 +9,7 @@ This project provides a reusable HDMI transmitter IP core for the Tang Nano 9K F
 ## Features
 
 - **HDMI Digital Video Output** at 640x480@60Hz using TMDS encoding
+- **Integrated Minimal HDMI Audio** (TERC4 data islands + ACR – tone generator)
 - **6 Auto-Cycling Demo Patterns** with 5-second intervals
 - **Comprehensive Debug System** with LED status indicators
 - **Robust Clock Generation** with debounced PLL lock detection
@@ -43,9 +44,9 @@ The 6 LEDs on the Tang Nano 9K provide comprehensive status information (all act
 
 | LED | Function | ON Status | Debug Purpose |
 |-----|----------|-----------|---------------|
-| **0** | PLL Stable Lock | PLL locked >40ms | **Critical**: Must be ON for operation |
+| **0** | PLL Stable Lock | PLL locked >40ms | Critical: must be ON |
 | **1** | HDMI Active | Generating pixels | Video output health |
-| **2** | Clock Validation | Clocks valid | Timing system status |
+| **2** | Audio Path Enabled | Audio mux active | Confirms audio build variant |
 | **3** | Pattern Bit 2 | Pattern MSB | Current pattern ID (binary) |
 | **4** | Pattern Bit 1 | Pattern middle | Current pattern ID (binary) |
 | **5** | Pattern Bit 0 + Frame | Pattern LSB + 60Hz | Pattern ID + frame rate |
@@ -55,13 +56,13 @@ The 6 LEDs on the Tang Nano 9K provide comprehensive status information (all act
 **Healthy System** (all working):
 - LED 0: ON (PLL stable)
 - LED 1: ON (HDMI active)
-- LED 2: ON (clocks valid)
+- LED 2: ON (Audio enabled)
 - LEDs 3-5: Change every 5 seconds showing pattern in binary
 
 **Troubleshooting**:
 - **LED 0 OFF**: PLL not stable - check 27MHz crystal or power supply
 - **LED 1 OFF**: No HDMI output - TMDS encoding issue or cable problem
-- **LED 2 OFF**: Clock problems - frequency out of range
+- **LED 2 OFF**: Audio path disabled (unexpected in current build) – check `audio_enable` and packetizer
 - **LEDs 3-5 stuck**: Pattern generator not cycling - reset or timing issue
 
 ## Project Architecture
@@ -81,9 +82,12 @@ The system uses a precise clock hierarchy for HDMI compliance:
 ```
 TN9K_HDMI/
 ├── src/                                    # Source files
-│   ├── TN9K_HDMI_top.vhd                  # Top-level HDMI controller with patterns
-│   ├── demo_pattern_gen.vhd               # 6-pattern generator with auto-cycling
-│   ├── hdmi_encoder.vhd                   # HDMI encoder with TMDS encoding
+│   ├── TN9K_HDMI_top.vhd                  # Top-level (video + audio + patterns)
+│   ├── demo_pattern_gen.vhd               # 6-pattern generator + audio tone source
+│   ├── hdmi_tx_640x480.vhd                # Integrated transmitter (video/audio mux)
+│   ├── hdmi_audio_packetizer.vhd          # Data island + TERC4 symbol scheduler
+│   ├── hdmi_audio_acr.vhd                 # ACR generator (N / CTS)
+│   ├── hdmi_terc4.vhd                     # 4-bit to 10-bit TERC4 encoding table
 │   ├── hdmi_timing.vhd                    # 640x480@60Hz timing generator
 │   ├── tmds_encoder.vhd                   # TMDS 8b/10b encoding logic
 │   ├── clocks/                            # Clock generation components
@@ -105,9 +109,9 @@ TN9K_HDMI/
 ### Key Components
 
 #### 1. **Top Module** (`TN9K_HDMI_top.vhd`)
-- Integrates all HDMI components with comprehensive debug
+- Integrates video pipeline, audio packetizer, pattern generator, debug
 - Manages clock generation via Gowin PLLs with monitoring
-- Includes debounced PLL lock and timing validation
+- Provides LED status and pattern control
 
 #### 2. **Demo Pattern Generator** (`demo_pattern_gen.vhd`)
 - Generates 6 different test patterns at 640x480 resolution
@@ -115,11 +119,14 @@ TN9K_HDMI/
 - Supports manual pattern override
 - Includes animated patterns for motion testing
 
-#### 3. **HDMI Encoder** (`hdmi_encoder.vhd`)
-- Full TMDS encoding for HDMI 1.4 compliance
-- 8b/10b encoding with DC balancing
-- 10:1 serialization using Gowin OSER10 primitives
-- ELVDS_OBUF differential output (Tang Nano 9K optimized)
+#### 3. **Audio Path** (`hdmi_audio_acr.vhd`, `hdmi_audio_packetizer.vhd`, `hdmi_terc4.vhd`)
+- Minimal ACR (N/CTS) generation for 48 kHz sync
+- TERC4 4->10 symbol mapping for data islands
+- Simplified framing accepted by common sinks
+
+#### 4. **TMDS Encoding** (`tmds_encoder.vhd`)
+- 8b/10b TMDS conversion with basic DC balance
+- Serialized via OSER10 then ELVDS_OBUF for differential output
 
 #### 4. **Timing Generator** (`hdmi_timing.vhd`)
 - Standard 640x480@60Hz VESA timing
@@ -163,10 +170,11 @@ TN9K_HDMI/
 ### Quick Test
 
 After programming:
+
 1. **Connect HDMI** cable to display
 2. **Check LED 0** - should be ON (PLL locked)
 3. **Check LED 1** - should be ON (HDMI active)
-4. **Check LED 2** - should be ON (clocks valid)
+4. **Check LED 2** - should be ON (Audio enabled)
 5. **Observe patterns** - should cycle every 5 seconds
 
 ## Manual Pattern Selection
@@ -211,6 +219,7 @@ The design implements a complete HDMI transmitter pipeline:
 5. **ELVDS_OBUF** provides differential signaling for Tang Nano 9K
 
 #### HDMI Video Specifications
+
 - **Resolution**: 640×480 pixels (VGA standard)
 - **Color**: 24-bit RGB (16.7 million colors)
 - **Pixel Clock**: 25.175 MHz (HDMI standard for 640x480@60Hz)
@@ -218,15 +227,17 @@ The design implements a complete HDMI transmitter pipeline:
 - **Generated by**: Hardware timing generators and pattern logic
 
 #### Pattern Generation Details
+
 - **Test Patterns**: 6 different patterns for comprehensive testing
-- **Auto-Cycling**: Patterns change every 5 seconds automatically  
+- **Auto-Cycling**: Patterns change every 5 seconds automatically
 - **Manual Override**: Can select specific patterns via input pins
 - **Animation Support**: Moving elements for motion testing
 
 ### Clock Generation
 
 The HDMI implementation uses Gowin-recommended clock architecture:
-- **Input Clock**: 27 MHz crystal oscillator 
+
+- **Input Clock**: 27 MHz crystal oscillator
 - **TMDS PLL** (`Gowin_TMDS_rPLL`): Generates 125.875 MHz TMDS clock
 - **Clock Divider** (`Gowin_HDMI_CLKDIV`): Creates phase-locked 25.175 MHz pixel clock
 
@@ -235,6 +246,7 @@ The 125.875 MHz and 25.175 MHz clocks maintain exact 5:1 ratio via hardware divi
 ### HDMI Output Method
 
 **Important**: Tang Nano 9K uses **ELVDS_OBUF emulated differential** signaling:
+
 - ELVDS_OBUF primitives create differential signals from single-ended
 - Automatic polarity inversion on negative outputs
 - OSER10 primitives handle 10:1 TMDS serialization at 125.875 MHz
@@ -246,7 +258,8 @@ The 125.875 MHz and 25.175 MHz clocks maintain exact 5:1 ratio via hardware divi
 Use the LED indicators to quickly identify issues:
 
 **Normal Operation** (all LEDs working):
-```
+
+```text
 LED 0: ON  (PLL stable and locked)
 LED 1: ON  (HDMI actively outputting video)
 LED 2: ON  (Clock timing validated)
@@ -258,18 +271,21 @@ LEDs 3-5: Change every 5 seconds (pattern cycling)
 #### 1. **No Display Output**
 
 **LED 0 OFF** - PLL Not Locked:
+
 - **Check**: 27MHz crystal oscillator
 - **Check**: Power supply voltage (3.3V, 1.8V rails)
 - **Check**: Board grounding and connections
 - **Solution**: Verify crystal is oscillating with scope
 
 **LED 1 OFF, LED 0 ON** - HDMI Not Active:
+
 - **Check**: HDMI cable connection
 - **Check**: Display compatibility (some don't support 640x480)
 - **Check**: TMDS encoding in synthesis report
 - **Solution**: Try different display or cable
 
 **LED 2 OFF, LEDs 0,1 ON** - Clock Timing Issues:
+
 - **Check**: Clock constraints properly loaded (.sdc file)
 - **Check**: Timing analysis reports
 - **Solution**: Review clock generation settings
@@ -277,11 +293,13 @@ LEDs 3-5: Change every 5 seconds (pattern cycling)
 #### 2. **Pattern Issues**
 
 **Patterns Not Changing** (LEDs 3-5 stuck):
+
 - **Check**: Reset signal stability
 - **Check**: Pattern counter in debug
 - **Solution**: Monitor frame_start signal with analyzer
 
 **Wrong Colors or Distortion**:
+
 - **Check**: RGB bit ordering in constraints
 - **Check**: TMDS encoding logic
 - **Solution**: Verify channel mapping (R=2, G=1, B=0)
@@ -289,21 +307,25 @@ LEDs 3-5: Change every 5 seconds (pattern cycling)
 #### 3. **Synthesis Issues**
 
 **"ELVDS_OBUF not found"**:
+
 - **Cause**: Incorrect Gowin IDE version
 - **Solution**: Use Gowin IDE v1.9.12 or later
 
 **Timing Violations**:
+
 - **Check**: SDC constraints loaded properly
 - **Check**: Critical path in timing report
 - **Solution**: Add pipeline registers if needed
 
 **Clock Domain Crossing Warnings**:
+
 - **Check**: Reset synchronization
 - **Solution**: Verify all clock domains have proper reset
 
 #### 4. **Advanced Debugging**
 
 **Using Gowin Analyzer**:
+
 ```vhdl
 -- Add these signals to Analyzer for debugging
 signal pll_lock_stable  : std_logic;
@@ -313,6 +335,7 @@ signal frame_counter    : unsigned(15 downto 0);
 ```
 
 **Expected Signal Behavior**:
+
 - `pll_lock_stable`: Should be high after ~50ms
 - `hdmi_active`: High when display connected
 - `current_pattern`: Should increment 0→1→2→3→4→5→0
@@ -321,11 +344,13 @@ signal frame_counter    : unsigned(15 downto 0);
 #### 5. **Hardware Validation**
 
 **Check with Oscilloscope**:
+
 - **27MHz Crystal**: Should see clean sine wave
 - **HDMI Clock**: 125.875 MHz differential on pins 68/69
 - **HDMI Data**: TMDS encoded data on pins 70/71, 72/73, 74/75
 
 **Power Supply Check**:
+
 - **3.3V Rail**: Should be stable ±5%
 - **1.8V Rail**: Should be stable ±5%
 - **Current Draw**: ~200-300mA typical
@@ -333,10 +358,12 @@ signal frame_counter    : unsigned(15 downto 0);
 ### Performance Validation
 
 **Frame Rate Check**:
+
 - LED 5 should blink at 30Hz (60Hz frame rate / 2)
 - Pattern should change every 5.000 seconds exactly
 
 **Timing Margins**:
+
 - Setup slack: Should be >0.5ns
 - Hold slack: Should be >0.1ns
 - Check Place & Route timing report
@@ -344,11 +371,13 @@ signal frame_counter    : unsigned(15 downto 0);
 ### Support Resources
 
 **Log Analysis**:
+
 - Check synthesis log for warnings
 - Review Place & Route timing report
 - Monitor resource utilization
 
 **Test Patterns**:
+
 - Use manual pattern selection for specific tests
 - Pattern 0: Basic color accuracy
 - Pattern 1: Pixel sharpness
@@ -364,11 +393,11 @@ signal frame_counter    : unsigned(15 downto 0);
 
 ### Future Enhancements
 
-- [ ] Add support for 720p and 1080p video modes
-- [ ] Implement HDMI audio transmission
-- [ ] Add more test patterns (SMPTE bars, zone plates)
-- [ ] Support for different refresh rates (30Hz, 75Hz)
-- [ ] Add video input processing capabilities
+- [ ] Higher resolutions (720p / 1080p)
+- [ ] Richer HDMI audio (PCM samples, proper packet headers)
+- [ ] Additional test patterns (SMPTE bars, zone plates)
+- [ ] Variable refresh rates (30Hz, 75Hz)
+- [ ] External video input / overlay pipeline
 
 ## License
 
@@ -376,7 +405,7 @@ Open source project - free to use and modify for your projects.
 
 ## Credits
 
-- HDMI implementation for Tang Nano 9K 
+- HDMI implementation for Tang Nano 9K
 - TMDS encoding and timing generation
 - Demo pattern generators and debug system
 - Documentation and implementation guide

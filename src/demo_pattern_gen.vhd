@@ -10,48 +10,61 @@ use ieee.numeric_std.all;
 
 entity demo_pattern_gen is
     port (
+        -- Clock inputs (from HDMI TX module)
         clk_pixel       : in  std_logic;  -- 25.175 MHz pixel clock
+        clk_audio       : in  std_logic;  -- 48 kHz audio sample clock
         reset           : in  std_logic;  -- Active high reset
-        
+
         -- Video timing inputs
         pixel_x         : in  std_logic_vector(9 downto 0);  -- Current X coordinate
         pixel_y         : in  std_logic_vector(9 downto 0);  -- Current Y coordinate
         video_active    : in  std_logic;  -- High during active video
-        
+
         -- Pattern selection
         pattern_select  : in  std_logic_vector(2 downto 0);  -- Manual pattern selection
         auto_mode       : in  std_logic;  -- Enable automatic pattern cycling
-        pixel_counter   : in  unsigned(31 downto 0);          -- Shared pixel counter
-        
-        -- RGB output
+
+        -- Video output
         rgb_out         : out std_logic_vector(23 downto 0);  -- 24-bit RGB output
-        
+
+        -- Audio output
+        audio_left      : out std_logic_vector(15 downto 0);  -- Left audio channel
+        audio_right     : out std_logic_vector(15 downto 0);  -- Right audio channel
+        audio_enable    : out std_logic;  -- Enable audio embedding
+
         -- Status
         current_pattern : out std_logic_vector(2 downto 0)   -- Current pattern number
     );
 end demo_pattern_gen;
 
 architecture rtl of demo_pattern_gen is
-    
-    -- Constants for timing
-    constant CLOCKS_PER_SEC : integer := 25175000;  -- 25.175 MHz
+
+    -- Constants for timing (corrected for 25.2 MHz pixel clock)
+    constant CLOCKS_PER_SEC : integer := 25200000;  -- 25.2 MHz
     constant PATTERN_DURATION : integer := 5;        -- 5 seconds per pattern
     constant CLOCKS_PER_PATTERN : integer := CLOCKS_PER_SEC * PATTERN_DURATION;
-    
-    -- Signals
+
+    -- Video signals
     signal pattern_counter : unsigned(27 downto 0) := (others => '0');
     signal auto_pattern : unsigned(2 downto 0) := (others => '0');
     signal active_pattern : std_logic_vector(2 downto 0);
     signal x : unsigned(9 downto 0);
     signal y : unsigned(9 downto 0);
-    
-    -- Frame counter for moving patterns (derived from shared pixel_counter)
     signal frame_counter : unsigned(7 downto 0) := (others => '0');
-    
+    signal pixel_counter : unsigned(31 downto 0) := (others => '0');
+
     -- Color components
     signal red   : std_logic_vector(7 downto 0);
     signal green : std_logic_vector(7 downto 0);
     signal blue  : std_logic_vector(7 downto 0);
+
+    -- Audio signals
+    signal audio_phase_acc : unsigned(15 downto 0) := (others => '0');
+    signal audio_amplitude : signed(15 downto 0);
+    signal audio_freq_div  : unsigned(15 downto 0);
+
+
+
     
 begin
     
@@ -84,13 +97,15 @@ begin
         end if;
     end process;
     
-    -- Frame counter for moving patterns (using shared pixel_counter)
+    -- Pixel and frame counters for animation
     process(clk_pixel, reset)
     begin
         if reset = '1' then
+            pixel_counter <= (others => '0');
             frame_counter <= (others => '0');
         elsif rising_edge(clk_pixel) then
-            -- Increment frame counter every ~60th of a second using shared pixel_counter
+            pixel_counter <= pixel_counter + 1;
+            -- Increment frame counter every ~60th of a second
             if pixel_counter(19 downto 0) = 0 then  -- ~24 Hz animation
                 frame_counter <= frame_counter + 1;
             end if;
@@ -204,5 +219,44 @@ begin
     
     -- Combine RGB components into 24-bit output
     rgb_out <= red & green & blue;
-    
+
+    ----------------------------------------------------------------------------
+    -- Audio Generation (Pattern-specific tones)
+    ----------------------------------------------------------------------------
+
+    -- Select frequency divider based on pattern
+    with active_pattern select
+        audio_freq_div <=
+            x"0200" when "000",  -- Pattern 0: 440 Hz (A4)
+            x"01C0" when "001",  -- Pattern 1: 494 Hz (B4)
+            x"0190" when "010",  -- Pattern 2: 523 Hz (C5)
+            x"0160" when "011",  -- Pattern 3: 587 Hz (D5)
+            x"0140" when "100",  -- Pattern 4: 659 Hz (E5)
+            x"0120" when "101",  -- Pattern 5: 698 Hz (F5)
+            x"0200" when others; -- Default: 440 Hz
+
+    -- Audio tone generation
+    process(clk_audio, reset)
+    begin
+        if reset = '1' then
+            audio_phase_acc <= (others => '0');
+            audio_amplitude <= (others => '0');
+        elsif rising_edge(clk_audio) then
+            -- Simple phase accumulator for tone generation
+            audio_phase_acc <= audio_phase_acc + audio_freq_div;
+
+            -- Generate sine-like tone using MSB as square wave approximation
+            if audio_phase_acc(15) = '1' then
+                audio_amplitude <= x"4000";  -- Positive amplitude
+            else
+                audio_amplitude <= x"C000";  -- Negative amplitude
+            end if;
+        end if;
+    end process;
+
+    -- Audio outputs
+    audio_left <= std_logic_vector(audio_amplitude);
+    audio_right <= std_logic_vector(audio_amplitude);
+    audio_enable <= '1';  -- Always enable audio
+
 end rtl;

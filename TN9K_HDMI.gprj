@@ -9,12 +9,17 @@
     </Option>
     <FileList>
         <File path="src/TN9K_HDMI_top.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_tx_640x480.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/demo_pattern_gen.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/tmds_encoder.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_timing.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_terc4.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_audio_acr.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_audio_packetizer.vhd" type="file.vhdl" enable="1"/>
         <File path="src/clocks/gowin_hdmi_clkdiv.vhd" type="file.vhdl" enable="1"/>
         <File path="src/clocks/gowin_tmds_rpll.vhd" type="file.vhdl" enable="1"/>
-        <File path="src/demo_pattern_gen.vhd" type="file.vhdl" enable="1"/>
-        <File path="src/hdmi_encoder.vhd" type="file.vhdl" enable="1"/>
-        <File path="src/hdmi_timing.vhd" type="file.vhdl" enable="1"/>
-        <File path="src/tmds_encoder.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/clocks/gowin_hdmi_clkdiv.ipc" type="file.ip" enable="1"/>
+        <File path="src/clocks/gowin_tmds_rpll.ipc" type="file.ip" enable="1"/>
         <File path="src/tn9k_hdmi.cst" type="file.cst" enable="1"/>
         <File path="src/tn9k_hdmi.sdc" type="file.sdc" enable="1"/>
     </FileList>

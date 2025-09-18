@@ -4,8 +4,7 @@
 -------------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
-use ieee.std_logic_unsigned.all;
-use ieee.std_logic_arith.all;
+use ieee.numeric_std.all;
 
 entity HDMI_TIMING is
     port (
@@ -143,7 +142,7 @@ begin
     de <= de_i;
     
     -- Pixel coordinates (always valid)
-    pixel_x <= conv_std_logic_vector(h_count, 10);
-    pixel_y <= conv_std_logic_vector(v_count, 10);
+    pixel_x <= std_logic_vector(to_unsigned(h_count, 10));
+    pixel_y <= std_logic_vector(to_unsigned(v_count, 10));
 
 end RTL;
