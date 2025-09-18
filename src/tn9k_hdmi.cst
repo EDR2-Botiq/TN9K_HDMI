@@ -1,0 +1,67 @@
+// =============================================================================
+// Tang Nano 9K HDMI Library - Constraint File
+// Based on GW1NR-9C FPGA (QN88 package)
+// =============================================================================
+
+// =============================================================================
+// Clock and Reset
+// =============================================================================
+IO_LOC "clk_crystal" 52;                 // 27MHz crystal oscillator (Bank 1, 3.3V)
+IO_PORT "clk_crystal" PULL_MODE=UP IO_TYPE=LVCMOS33;
+
+IO_LOC "reset_n" 4;                      // Reset button S1 (Bank 3, 1.8V, active low)
+IO_PORT "reset_n" PULL_MODE=UP IO_TYPE=LVCMOS18;
+
+// =============================================================================
+// Pattern Selection Inputs (Optional - for demo patterns)
+// =============================================================================
+IO_LOC "pattern_select[0]" 25;           // IOB11A (Bank 2, 3.3V) - Pattern bit 0
+IO_LOC "pattern_select[1]" 26;           // IOB11B (Bank 2, 3.3V) - Pattern bit 1  
+IO_LOC "pattern_select[2]" 27;           // IOB13A (Bank 2, 3.3V) - Pattern bit 2
+
+IO_PORT "pattern_select[0]" PULL_MODE=UP IO_TYPE=LVCMOS33;
+IO_PORT "pattern_select[1]" PULL_MODE=UP IO_TYPE=LVCMOS33;
+IO_PORT "pattern_select[2]" PULL_MODE=UP IO_TYPE=LVCMOS33;
+
+// Alternative: Disable pattern selection to free up pins for HDMI
+// Comment out pattern_select constraints above if needed
+
+// =============================================================================
+// HDMI Output (Tang Nano 9K Emulated LVDS via ELVDS_OBUF)
+// =============================================================================
+// HDMI TMDS pins - Official Tang Nano 9K HDMI pinout from schematic
+// These are the actual HDMI connector pins on the Tang Nano 9K board
+IO_LOC "hdmi_tx_clk_p" 69;               // HDMI CLK+ (PIN69_RGB_G3/HDMI_CK_P)
+IO_LOC "hdmi_tx_clk_n" 68;               // HDMI CLK- (PIN68_RGB_G4/HDMI_CK_N)
+
+IO_LOC "hdmi_tx_p[2]" 75;                // HDMI D2+ Red (PIN75_RGB_R3/HDMI_D2_P)
+IO_LOC "hdmi_tx_n[2]" 74;                // HDMI D2- Red (PIN74_RGB_R4/HDMI_D2_N)
+
+IO_LOC "hdmi_tx_p[1]" 73;                // HDMI D1+ Green (PIN73_RGB_R5/HDMI_D1_P) 
+IO_LOC "hdmi_tx_n[1]" 72;                // HDMI D1- Green (PIN72_RGB_R6/HDMI_D1_N)
+
+IO_LOC "hdmi_tx_p[0]" 71;                // HDMI D0+ Blue (PIN71_RGB_R7/HDMI_D0_P)
+IO_LOC "hdmi_tx_n[0]" 70;                // HDMI D0- Blue (PIN70_RGB_G2/HDMI_D0_N)
+
+// =============================================================================
+// Status LEDs (**CRITICAL: ACTIVE LOW** - LED ON = '0', LED OFF = '1')
+// =============================================================================
+IO_LOC "led[0]" 10;                      // LED1 - IOL15A (Bank 3, 1.8V)
+IO_LOC "led[1]" 11;                      // LED2 - IOL16B (Bank 3, 1.8V)
+IO_LOC "led[2]" 13;                      // LED3 - IOL21B (Bank 3, 1.8V)
+IO_LOC "led[3]" 14;                      // LED4 - IOL22B (Bank 3, 1.8V)
+IO_LOC "led[4]" 15;                      // LED5 - IOL25B (Bank 3, 1.8V)
+IO_LOC "led[5]" 16;                      // LED6 - IOL26B (Bank 3, 1.8V)
+
+IO_PORT "led[0]" IO_TYPE=LVCMOS18;
+IO_PORT "led[1]" IO_TYPE=LVCMOS18;
+IO_PORT "led[2]" IO_TYPE=LVCMOS18;
+IO_PORT "led[3]" IO_TYPE=LVCMOS18;
+IO_PORT "led[4]" IO_TYPE=LVCMOS18;
+IO_PORT "led[5]" IO_TYPE=LVCMOS18;
+
+// =============================================================================
+// Clock Buffer Assignment (CST-specific)
+// =============================================================================
+// Primary input clock buffer assignment
+CLOCK_LOC "clk_crystal" BUFG;

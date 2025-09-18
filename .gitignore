@@ -1,0 +1,129 @@
+# Claude Code configuration
+CLAUDE.md
+
+# Gowin IDE Build Artifacts
+impl/
+*.rpt
+*.log
+*.fs
+*.bit
+*.binx
+*.bin
+*.db
+
+# Gowin Synthesis Files
+gwsynthesis/
+temp/
+pnr/
+
+# Gowin IDE Generated Files
+*.gprj.user
+*.gprj.local
+*.gprj.bak
+*.gprj_
+
+# IP Core Generated Files (keep source .ipc but ignore generated)
+*_tmp.v
+*_tmp.vhd
+*.vo
+*.vho
+*.mod
+
+# Gowin Specific Temporary Files
+*.vg
+*.prj
+*.html
+*.xml
+*.json
+*.timing_paths
+*.power.html
+*.pin.html
+*.tr.html
+*.tr_content.html
+*.tr_cata.html
+device.cfg
+cmd.do
+
+# Timing and Analysis Reports
+*.twr
+*.par
+*.bgn
+*.drc
+*.map
+*.mrp
+*.ngd
+*.pcf
+*.rpt.html
+*.rpt.txt
+*_syn.rpt.html
+*_syn_resource.html
+*_syn_rsc.xml
+
+# FPGA Vendor Tools
+*.xise
+*.xise.bak
+*.gise
+*.ise
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+desktop.ini
+
+# Backup Files
+*~
+*.bak
+*.tmp
+*.orig
+
+# Editor Files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-*
+
+# Python (if used for scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Gowin Programmer Files
+*.fsh
+*.fse
+*.hed
+
+# Keep important files
+!*.vhd
+!*.v
+!*.cst
+!*.sdc
+!*.ipc
+!README.md
+!HDMI_IMPLEMENTATION_GUIDE.md
+!*.gprj
