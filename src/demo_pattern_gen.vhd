@@ -260,24 +260,22 @@ begin
     audio_freq_div <= x"0037";  -- 440 Hz tone (A4 musical reference)
 
     -- VIC20NANO SIMPLE PHASE ACCUMULATOR:
-    -- Use pixel clock with audio sample enable for proper timing
-    process(clk_pixel, reset)
+    -- Generate audio strictly in the clk_audio domain for coherent 48 kHz samples
+    -- This avoids unsafe clock-domain gating that can lead to silent audio.
+    process(clk_audio, reset)
     begin
         if reset = '1' then
             audio_phase_acc <= (others => '0');
             audio_amplitude <= (others => '0');
-        elsif rising_edge(clk_pixel) then
-            -- Audio sample enable from clk_audio rising edge
-            if clk_audio = '1' then
-                -- Simple phase accumulator
-                audio_phase_acc <= audio_phase_acc + audio_freq_div;
+        elsif rising_edge(clk_audio) then
+            -- Simple phase accumulator
+            audio_phase_acc <= audio_phase_acc + audio_freq_div;
 
-                -- Square wave generation using MSB
-                if audio_phase_acc(15) = '1' then
-                    audio_amplitude <= x"4000";  -- +50% amplitude
-                else
-                    audio_amplitude <= x"C000";  -- -50% amplitude
-                end if;
+            -- Square wave generation using MSB
+            if audio_phase_acc(15) = '1' then
+                audio_amplitude <= x"4000";  -- +50% amplitude
+            else
+                audio_amplitude <= x"C000";  -- -50% amplitude
             end if;
         end if;
     end process;

@@ -105,7 +105,7 @@ architecture rtl of TN9K_HDMI_800x480_top is
     end component;
 
     -- Clock and timing signals from HDMI TX
-    signal clk_pixel        : std_logic;  -- 25.175 MHz pixel clock
+    signal clk_pixel        : std_logic;  -- ~32.4 MHz pixel clock (800x480)
     signal clk_audio        : std_logic;  -- 48 kHz audio clock
     signal hsync            : std_logic;
     signal vsync            : std_logic;

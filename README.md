@@ -4,11 +4,11 @@ A complete HDMI transmitter implementation for the Tang Nano 9K FPGA board featu
 
 ## Overview
 
-This project provides a reusable HDMI transmitter IP core for the Tang Nano 9K FPGA development board. The library outputs 640x480@60Hz video over HDMI using TMDS encoding and includes 6 built-in test patterns with automatic cycling, plus comprehensive debug and monitoring features.
+This project provides a reusable HDMI transmitter IP core for the Tang Nano 9K FPGA development board. The library outputs 800x480@60Hz video over HDMI using TMDS encoding and includes 6 built-in test patterns with automatic cycling, plus comprehensive debug and monitoring features.
 
 ## Features
 
-- **HDMI Digital Video Output** at 640x480@60Hz using TMDS encoding
+- **HDMI Digital Video Output** at 800x480@60Hz using TMDS encoding
 - **Stable HDMI Audio Support** VIC20Nano packet infrastructure with TERC4 + ACR
 - **6 Auto-Cycling Demo Patterns** with 5-second intervals
 - **Comprehensive Debug System** with LED status indicators
@@ -21,7 +21,7 @@ This project provides a reusable HDMI transmitter IP core for the Tang Nano 9K F
 ## Hardware Requirements
 
 - **Tang Nano 9K FPGA Board** (GW1NR-9C)
-- **HDMI Display** or monitor supporting 640x480@60Hz
+- **HDMI Display** or monitor supporting 800x480@60Hz
 - **HDMI Cable**
 - **Power Supply** for Tang Nano 9K (USB or external)
 
@@ -74,29 +74,29 @@ The system uses a precise clock hierarchy for HDMI compliance:
 | Clock Signal | Frequency | Purpose |
 |-------------|-----------|---------|
 | `clk_crystal` | 27 MHz | Crystal oscillator input |
-| `clk_tmds_serial` | 126.000 MHz | TMDS serialization (27 MHz × 14 ÷ 3) |
-| `clk_pixel` | 25.200 MHz | Pixel clock (÷5) – close to legacy 25.175 MHz VGA spec (≈0.1% error) |
+| `clk_tmds_serial` | 162.000 MHz | TMDS serialization (27 MHz × 6) |
+| `clk_pixel` | 32.400 MHz | Pixel clock (÷5) for 800x480 |
 
 ### Directory Structure
 
 ```
 TN9K_HDMI/
 ├── src/                                    # Source files
-│   ├── TN9K_HDMI_top.vhd                  # Top-level (video + audio + patterns)
+│   ├── TN9K_HDMI_800x480_top.vhd          # Top-level (video + audio + patterns) for 800x480
 │   ├── demo_pattern_gen.vhd               # 6-pattern generator + audio tone source
-│   ├── hdmi_tx_640x480.vhd                # Integrated transmitter (video/audio mux)
+│   ├── hdmi_tx_800x480.vhd                # Integrated transmitter (video/audio mux) 800x480
 │   ├── hdmi_packet_picker.vhd             # VIC20Nano packet scheduling system
 │   ├── hdmi_packet_assembler.vhd          # BCH error correction and packet assembly
 │   ├── hdmi_audio_sample_packet.vhd       # Audio sample packet generator
 │   ├── hdmi_constants.vhd                 # Centralized timing and audio constants
 │   ├── hdmi_audio_acr.vhd                 # ACR generator (N / CTS)
 │   ├── hdmi_terc4.vhd                     # 4-bit to 10-bit TERC4 encoding table
-│   ├── hdmi_timing.vhd                    # 640x480@60Hz timing generator
+│   ├── hdmi_timing.vhd                    # 800x480@60Hz timing generator
 │   ├── tmds_encoder.vhd                   # TMDS 8b/10b encoding logic
 │   ├── clocks/                            # Clock generation components
-│   │   ├── gowin_tmds_rpll.vhd           # 126.000 MHz TMDS PLL
-│   │   ├── gowin_tmds_rpll.ipc           # PLL IP configuration
-│   │   ├── gowin_hdmi_clkdiv.vhd         # 25.200 MHz pixel clock divider
+│   │   ├── gowin_tmds_rpll_800x480.vhd   # 162.000 MHz TMDS PLL
+│   │   ├── gowin_tmds_rpll_800x480.ipc   # PLL IP configuration
+│   │   ├── gowin_hdmi_clkdiv_800x480.vhd # 32.400 MHz pixel clock divider
 │   │   └── gowin_hdmi_clkdiv.ipc         # Clock divider IP config
 │   ├── tn9k_hdmi.cst                      # Pin constraints for Tang Nano 9K
 │   └── tn9k_hdmi.sdc                      # Timing constraints
@@ -105,26 +105,29 @@ TN9K_HDMI/
 │   ├── BUILD.md                           # Build instructions
 │   └── Tang_Nano_9K_Complete_Reference.md # Board reference
 ├── impl/                                   # Build artifacts (auto-generated, git-ignored)
-├── TN9K_HDMI.gprj                         # Gowin IDE project file
+├── TN9K_HDMI_800x480.gprj                 # Gowin IDE project file (800x480)
 └── README.md                              # This file
 ```
 
 ### Key Components
 
-#### 1. **Top Module** (`TN9K_HDMI_top.vhd`)
+ 
+#### 1. **Top Module** (`TN9K_HDMI_800x480_top.vhd`)
+ 
 - Integrates video pipeline, audio packetizer, pattern generator, debug
 - Manages clock generation via Gowin PLLs with monitoring
 - Provides LED status and pattern control
 
 #### 2. **Demo Pattern Generator** (`demo_pattern_gen.vhd`)
-- Generates 6 different test patterns at 640x480 resolution
+
+- Generates 6 different test patterns at 800x480 resolution
 - Auto-cycles every 5 seconds with precise timing
 - Supports manual pattern override
 - Includes animated patterns for motion testing
 
 #### 3. **Audio Path** (`hdmi_audio_acr.vhd`, `hdmi_packet_picker.vhd`, `hdmi_terc4.vhd`)
 
-- ACR (N/CTS) generation for 48 kHz sync @ 25.200 MHz pixel clock
+- ACR (N/CTS) generation for 48 kHz sync @ 32.400 MHz pixel clock
 - TERC4 4->10 symbol mapping with registered inputs for signal stability
 - VIC20Nano packet infrastructure using efficient case statements (no large sparse arrays)
 - BCH error correction and proper packet assembly
@@ -140,7 +143,7 @@ TN9K_HDMI/
 
 #### 4. **Timing Generator** (`hdmi_timing.vhd`)
 
-- Standard 640x480@60Hz VESA timing
+- 800x480@60Hz timing
 - Generates HSync, VSync, and Data Enable signals
 - Provides pixel coordinates for pattern generation
 - Frame start indicator for synchronization
@@ -151,22 +154,22 @@ TN9K_HDMI/
 
 1. **Gowin IDE** (v1.9.12 or later recommended)
 2. **Tang Nano 9K Board** with USB-C cable
-3. **HDMI Cable and Display** supporting 640x480@60Hz
+3. **HDMI Cable and Display** supporting 800x480@60Hz
 
-### Build Steps
+### Build Steps (800x480)
 
 1. **Open project in Gowin IDE**:
 
    ```bash
    # Launch Gowin IDE
-   gw_ide TN9K_HDMI.gprj
+   gw_ide TN9K_HDMI_800x480.gprj
    ```
 
 2. **Verify project settings**:
    - **Device**: GW1NR-9C
    - **Package**: QN88PC6/I5
    - **Speed**: -6
-   - **Top-level**: `TN9K_HDMI_top`
+   - **Top-level**: `TN9K_HDMI_800x480_top`
 
 3. **Synthesize and build**:
    - Run Synthesis (F7) - should complete without errors

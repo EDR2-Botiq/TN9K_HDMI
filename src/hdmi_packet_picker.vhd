@@ -37,7 +37,7 @@ entity hdmi_packet_picker is
         -- Runtime controls allow dynamic packet management vs compile-time optimization
         ENABLE_ACR        : boolean := true;   -- Audio Clock Regeneration (essential)
         ENABLE_ASP        : boolean := true;   -- Audio Sample Packets (core audio data)
-        ENABLE_INFOFRAME  : boolean := false;  -- InfoFrames (deferred for stability)
+        ENABLE_INFOFRAME  : boolean := true;   -- InfoFrames (audio metadata)
 
         -- VIC20NANO BANDWIDTH OPTIMIZATION:
         -- Single subframe mode reduces bandwidth requirements while maintaining quality
@@ -124,6 +124,22 @@ architecture rtl of hdmi_packet_picker is
         );
     end component;
 
+    -- Audio InfoFrame component
+    component hdmi_audio_infoframe is
+        port (
+            clk_pixel           : in  std_logic;
+            reset               : in  std_logic;
+            channel_count       : in  std_logic_vector(2 downto 0);
+            sample_frequency    : in  std_logic_vector(2 downto 0);
+            sample_size         : in  std_logic_vector(1 downto 0);
+            header              : out std_logic_vector(23 downto 0);
+            sub0                : out std_logic_vector(55 downto 0);
+            sub1                : out std_logic_vector(55 downto 0);
+            sub2                : out std_logic_vector(55 downto 0);
+            sub3                : out std_logic_vector(55 downto 0)
+        );
+    end component;
+
     -- ACR values now supplied by top-level (dynamic / prevents sweep)
 
     -- Audio Sample Packet outputs
@@ -133,6 +149,13 @@ architecture rtl of hdmi_packet_picker is
     signal asp_sub2   : std_logic_vector(55 downto 0);
     signal asp_sub3   : std_logic_vector(55 downto 0);
 
+    -- Audio InfoFrame Packet outputs
+    signal aif_header : std_logic_vector(23 downto 0);
+    signal aif_sub0   : std_logic_vector(55 downto 0);
+    signal aif_sub1   : std_logic_vector(55 downto 0);
+    signal aif_sub2   : std_logic_vector(55 downto 0);
+    signal aif_sub3   : std_logic_vector(55 downto 0);
+
     -- Keep ASP outputs to prevent entire generator being swept during early bring-up
     attribute keep : string;
     attribute keep of asp_header : signal is "true";
@@ -140,6 +163,11 @@ architecture rtl of hdmi_packet_picker is
     attribute keep of asp_sub1   : signal is "true";
     attribute keep of asp_sub2   : signal is "true";
     attribute keep of asp_sub3   : signal is "true";
+    attribute keep of aif_header : signal is "true";
+    attribute keep of aif_sub0   : signal is "true";
+    attribute keep of aif_sub1   : signal is "true";
+    attribute keep of aif_sub2   : signal is "true";
+    attribute keep of aif_sub3   : signal is "true";
 
     -- Internal control derived from generics
     signal allow_acr       : boolean;
@@ -262,7 +290,7 @@ begin
     -- 2. Fast synthesis and timing closure
     -- 3. Synthesis-friendly structure prevents optimization issues
     -- 4. Easy to understand and maintain
-    process(packet_type, asp_header, asp_sub0, asp_sub1, asp_sub2, asp_sub3, acr_n, acr_cts)
+    process(packet_type, asp_header, asp_sub0, asp_sub1, asp_sub2, asp_sub3, aif_header, aif_sub0, aif_sub1, aif_sub2, aif_sub3, acr_n, acr_cts)
     begin
         case packet_type is
             when x"00" =>  -- NULL PACKET (HDMI idle state)
@@ -291,13 +319,13 @@ begin
                 sub2 <= asp_sub2;      -- Audio subframe 2 (left channel secondary)
                 sub3 <= asp_sub3;      -- Audio subframe 3 (right channel secondary)
 
-            when x"84" =>  -- AUDIO INFO FRAME (Optional metadata)
-                -- VIC20Nano approach: Keep simple, disable by default for stability
-                header <= x"840100";  -- Audio InfoFrame type, version 1, length 0
-                sub0 <= (47 downto 0 => '0') & x"01";  -- Basic stereo configuration
-                sub1 <= (others => '0');  -- No extended audio information
-                sub2 <= (others => '0');  -- No speaker allocation data
-                sub3 <= (others => '0');  -- No additional metadata
+            when x"84" =>  -- AUDIO INFO FRAME (Proper metadata)
+                -- VIC20Nano compatible: Full HDMI-compliant Audio InfoFrame
+                header <= aif_header;  -- Proper InfoFrame header with checksum
+                sub0 <= aif_sub0;      -- Audio parameters (channels, sample rate, etc.)
+                sub1 <= aif_sub1;      -- Extended audio metadata (usually zeros)
+                sub2 <= aif_sub2;      -- Speaker allocation (stereo = zeros)
+                sub3 <= aif_sub3;      -- Additional metadata (usually zeros)
 
             when others =>  -- Default to NULL packet
                 header <= (others => '0');
@@ -307,5 +335,20 @@ begin
                 sub3 <= (others => '0');
         end case;
     end process;
+
+    -- Audio InfoFrame generator (provides proper HDMI audio metadata)
+    audio_infoframe_inst : hdmi_audio_infoframe
+        port map (
+            clk_pixel        => clk_pixel,
+            reset            => reset,
+            channel_count    => "001",    -- 2 channels (stereo)
+            sample_frequency => "010",    -- 48 kHz
+            sample_size      => "01",     -- 16-bit
+            header           => aif_header,
+            sub0             => aif_sub0,
+            sub1             => aif_sub1,
+            sub2             => aif_sub2,
+            sub3             => aif_sub3
+        );
 
 end rtl;

@@ -636,7 +636,7 @@ begin
             AUDIO_RATE          => AUDIO_SAMPLE_FREQ,
             ENABLE_ACR          => true,   -- ACR packets for audio clock sync
             ENABLE_ASP          => true,   -- Audio sample packets now enabled with guard band protection
-            ENABLE_INFOFRAME    => false,  -- InfoFrame deferred for now
+            ENABLE_INFOFRAME    => true,   -- InfoFrame enabled for proper audio metadata
             ASP_SINGLE_SUBFRAME => true    -- Single subframe mode for stability
         )
         port map (

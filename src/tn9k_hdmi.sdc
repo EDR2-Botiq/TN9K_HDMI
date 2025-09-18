@@ -30,11 +30,13 @@ create_clock -name clk_crystal -period 37.037 -waveform {0 18.518} [get_ports {c
 #     -divide_by 1050 [get_ports {clk_audio}]
 
 ################################################################################
-# 2. Clock Constraints (Primary Input Only)
+# 2. Clock Constraints
 ################################################################################
 
-# Note: Internal clocks handled automatically by Gowin tools
-# WARNING TA1132 about undetermined clocks is normal and CANNOT be eliminated
+# Note: Internal generated clocks are inferred by Gowin tools.
+# Explicitly declare pixel and audio as asynchronous clock groups to
+# suppress relationship warnings (TA1117/CK3000) and rely on CDC logic.
+# set_clock_groups -asynchronous -group [get_clocks {clk_pixel}] -group [get_clocks {clk_audio}]
 
 ################################################################################
 # 3. Basic Timing Constraints (Minimal for Gowin)

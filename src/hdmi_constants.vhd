@@ -14,15 +14,15 @@ package hdmi_constants is
     ----------------------------------------------------------------------------
     constant CRYSTAL_FREQ       : integer := 27000000;   -- 27 MHz crystal
     constant TMDS_FREQ          : integer := 162000000;  -- 162 MHz TMDS serial clock (27*6=162MHz)
-    constant PIXEL_FREQ         : integer := 32400000;   -- 32.4 MHz pixel clock for 800x480@60Hz (162/5)
+    constant PIXEL_FREQ         : integer := 32400000;   -- 32.4 MHz GENERATED pixel clock (162MHz/5)
     constant AUDIO_SAMPLE_FREQ  : integer := 48000;      -- 48 kHz audio sample rate
 
     ----------------------------------------------------------------------------
     -- Audio Constants
     ----------------------------------------------------------------------------
     -- Audio sample rate divider for 32.4 MHz pixel clock (162MHz/5)
-    -- Calculation: 32400000 / (48000 * 2) = 32400000 / 96000 = 337.5
-    constant AUDIO_DIV          : integer := 337;        -- Use 337 for ~48.07 kHz (VIC20Nano compatible)
+    -- Calculation: 32400000 / (48000 * 2) = 337.5, rounded to 338 for closer to 48 kHz
+    constant AUDIO_DIV          : integer := 338;        -- Use 338 for ~47.93 kHz (closer to 48 kHz target)
 
     -- IEC 60958-3 sampling frequency code for 48 kHz
     constant SAMPLING_FREQ_CODE : std_logic_vector(3 downto 0) := "0010";
@@ -30,10 +30,10 @@ package hdmi_constants is
     ----------------------------------------------------------------------------
     -- HDMI Audio Clock Regeneration (ACR) Constants - VIC20Nano Compatible
     ----------------------------------------------------------------------------
-    -- VIC20Nano/fintros-compatible ACR values for 48 kHz audio with 32.4 MHz pixel clock
-    -- Using actual TMDS/5 frequency for maximum accuracy and display compatibility
+    -- ACR values for 48 kHz audio with GENERATED 32.4 MHz pixel clock
+    -- Generated pixel clock: 162 MHz ÷ 5 = 32.4 MHz (from PLL + CLKDIV)
     constant ACR_N_48KHZ        : integer := 6144;       -- Standard N for 48 kHz (HDMI specification)
-    constant ACR_CTS_32_4MHZ    : integer := 32400;      -- CTS for 32.4 MHz actual pixel clock (162/5)
+    constant ACR_CTS_32_4MHZ    : integer := 32400;      -- CTS for GENERATED 32.4 MHz pixel clock
 
     -- ACR values as 20-bit vectors
     constant ACR_N_VECTOR       : std_logic_vector(19 downto 0) := std_logic_vector(to_unsigned(ACR_N_48KHZ, 20));
