@@ -1,0 +1,44 @@
+<?xml version="1" encoding="UTF-8"?>
+<!DOCTYPE gowin-fpga-project>
+<Project>
+    <Template>FPGA</Template>
+    <Version>5</Version>
+    <Device name="GW1NR-9C" pn="GW1NR-LV9QN88PC6/I5">gw1nr9c-004</Device>
+    <Configuration>
+        <Option name="verilog_std" value="sysv2017"/>
+        <Option name="vhdl_std" value="vhdl2008"/>
+        <Option name="mixed_mode" value="1"/>
+        <Option name="enable_systemverilog" value="1"/>
+    </Configuration>
+    <FileList>
+        <!-- VHDL Top Level and Support Files -->
+        <File path="src/hdmi_package.vhd" type="file.vhdl" enable="1"/>                    <!-- HDMI component declarations -->
+        <File path="src/TN9K_HDMI_800x480_top.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi_constants.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/demo_pattern_gen.vhd" type="file.vhdl" enable="1"/>
+
+        <!-- Clock Generation (VHDL) -->
+        <File path="src/clocks/gowin_tmds_rpll.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/clocks/gowin_hdmi_clkdiv.vhd" type="file.vhdl" enable="1"/>
+
+        <!-- hdl-util HDMI Core (SystemVerilog) - https://github.com/hdl-util/hdmi -->
+        <File path="src/hdmi/hdmi.sv" type="file.verilog" enable="1"/>                                    <!-- Main HDMI controller with VIDEO_ID_CODE 200 for 800x480@60Hz -->
+        <File path="src/hdmi/packet_picker.sv" type="file.verilog" enable="1"/>                          <!-- Dynamic packet scheduling -->
+        <File path="src/hdmi/packet_assembler.sv" type="file.verilog" enable="1"/>                       <!-- BCH error correction and packet assembly -->
+        <File path="src/hdmi/serializer.sv" type="file.verilog" enable="1"/>                             <!-- OSER10 serialization for Gowin FPGAs -->
+        <File path="src/hdmi/tmds_channel.sv" type="file.verilog" enable="1"/>                           <!-- TMDS encoding per channel -->
+        <File path="src/hdmi/audio_sample_packet.sv" type="file.verilog" enable="1"/>                    <!-- IEC 60958 audio sample packets -->
+        <File path="src/hdmi/audio_clock_regeneration_packet.sv" type="file.verilog" enable="1"/>        <!-- Audio Clock Regeneration (N/CTS) -->
+        <File path="src/hdmi/auxiliary_video_information_info_frame.sv" type="file.verilog" enable="1"/>  <!-- AVI InfoFrame for video format -->
+        <File path="src/hdmi/audio_info_frame.sv" type="file.verilog" enable="1"/>                       <!-- Audio InfoFrame for audio format -->
+        <File path="src/hdmi/source_product_description_info_frame.sv" type="file.verilog" enable="1"/>  <!-- SPD InfoFrame for device info -->
+
+        <!-- Constraint Files -->
+        <File path="src/tn9k_hdmi.cst" type="file.cst" enable="1"/>
+        <File path="src/tn9k_hdmi.sdc" type="file.sdc" enable="1"/>
+
+        <!-- IP Configuration Files -->
+        <File path="src/clocks/gowin_tmds_rpll.ipc" type="file.other" enable="1"/>
+        <File path="src/clocks/gowin_hdmi_clkdiv.ipc" type="file.other" enable="1"/>
+    </FileList>
+</Project>
