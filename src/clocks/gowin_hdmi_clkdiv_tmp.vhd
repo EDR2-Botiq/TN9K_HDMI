@@ -1,11 +1,11 @@
 --Copyright (C)2014-2025 Gowin Semiconductor Corporation.
 --All rights reserved.
 --File Title: Template file for instantiation
---Tool Version: V1.9.12 (64-bit)
+--Tool Version: V1.9.11.03 Education
 --Part Number: GW1NR-LV9QN88PC6/I5
 --Device: GW1NR-9
 --Device Version: C
---Created Time: Fri Sep 19 03:44:15 2025
+--Created Time: Fri Sep 19 11:38:21 2025
 
 --Change the instance name and port connections to the signal names
 ----------Copy here to design--------

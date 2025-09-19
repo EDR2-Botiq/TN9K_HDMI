@@ -1,11 +1,11 @@
 --Copyright (C)2014-2025 Gowin Semiconductor Corporation.
 --All rights reserved.
 --File Title: IP file
---Tool Version: V1.9.12 (64-bit)
+--Tool Version: V1.9.11.03 Education
 --Part Number: GW1NR-LV9QN88PC6/I5
 --Device: GW1NR-9
 --Device Version: C
---Created Time: Thu Sep 18 22:10:19 2025
+--Created Time: Fri Sep 19 11:39:56 2025
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -91,9 +91,9 @@ begin
             FCLKIN => "27",
             DEVICE => "GW1NR-9C",
             DYN_IDIV_SEL => "false",
-            IDIV_SEL => 2,
+            IDIV_SEL => 5,
             DYN_FBDIV_SEL => "false",
-            FBDIV_SEL => 13,
+            FBDIV_SEL => 36,
             DYN_ODIV_SEL => "false",
             ODIV_SEL => 4,
             PSDA_SEL => "0000",
@@ -117,8 +117,8 @@ begin
             CLKOUTP => clkoutp_o,
             CLKOUTD => clkoutd_o,
             CLKOUTD3 => clkoutd3_o,
-            RESET => gw_gnd,     -- Keep grounded for free-running PLL
-            RESET_P => gw_gnd,   -- Keep grounded for free-running PLL
+            RESET => gw_gnd,
+            RESET_P => gw_gnd,
             CLKIN => clkin,
             CLKFB => gw_gnd,
             FBDSEL => FBDSEL_i,
